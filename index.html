@@ -6,11 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#6366f1">
-<meta name="apple-mobile-web-app-title" content="存款记">
+<meta name="apple-mobile-web-app-title" content="我的钱包">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-<title>存款记</title>
+<title>我的钱包</title>
 <style>
 :root {
   --bg: #f5f5f7;
@@ -767,7 +767,7 @@ body {
 
 <div class="header">
   <div class="header-top">
-    <div class="app-title">存款记</div>
+    <div class="app-title">我的钱包</div>
     <div class="header-actions">
       <button class="icon-btn" onclick="exportData()" title="导出">↓</button>
       <button class="icon-btn" onclick="showAddProjectSheet()" title="新增项目">＋</button>
@@ -1418,33 +1418,37 @@ function showAddRecordSheet(pid) {
 
   openSheet(`
     <div class="sheet-title">记一笔</div>
-    <div class="form-group">
-      <label class="form-label">选择项目</label>
-      <select class="form-select" id="recProject">
-        <option value="">请选择项目</option>
-        ${projectOptions}
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">金额（元）</label>
-      <input type="number" class="form-input amount-input" id="recAmount" placeholder="0.00（可填负数）" step="0.01">
-      <div class="quick-amounts">
-        <span class="quick-amount" onclick="document.getElementById('recAmount').value=1000">+1千</span>
-        <span class="quick-amount" onclick="document.getElementById('recAmount').value=10000">+1万</span>
-        <span class="quick-amount" onclick="document.getElementById('recAmount').value=50000">+5万</span>
-        <span class="quick-amount" onclick="document.getElementById('recAmount').value=100000">+10万</span>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">选择项目</label>
+        <select class="form-select" id="recProject">
+          <option value="">请选择项目</option>
+          ${projectOptions}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">金额（元）</label>
+        <input type="number" class="form-input amount-input" id="recAmount" placeholder="0.00（可填负数）" step="0.01">
+        <div class="quick-amounts">
+          <span class="quick-amount" onclick="document.getElementById('recAmount').value=1000">+1千</span>
+          <span class="quick-amount" onclick="document.getElementById('recAmount').value=10000">+1万</span>
+          <span class="quick-amount" onclick="document.getElementById('recAmount').value=50000">+5万</span>
+          <span class="quick-amount" onclick="document.getElementById('recAmount').value=100000">+10万</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">日期时间</label>
+        <input type="datetime-local" class="form-input" id="recDate" value="${localNow}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注（选填）</label>
+        <input type="text" class="form-input" id="recNote" placeholder="如：工资、理财收益、开销...">
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">日期时间</label>
-      <input type="datetime-local" class="form-input" id="recDate" value="${localNow}">
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveRecord()">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">备注（选填）</label>
-      <input type="text" class="form-input" id="recNote" placeholder="如：工资、理财收益、开销...">
-    </div>
-    <button class="btn-primary" onclick="saveRecord()">保存</button>
-    <button class="btn-secondary" onclick="closeSheet()">取消</button>
   `);
 }
 
@@ -1482,25 +1486,29 @@ function editRecord(rid) {
 
   openSheet(`
     <div class="sheet-title">编辑记录</div>
-    <div class="form-group">
-      <label class="form-label">选择项目</label>
-      <select class="form-select" id="recProject">${projectOptions}</select>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">选择项目</label>
+        <select class="form-select" id="recProject">${projectOptions}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">金额（元）</label>
+        <input type="number" class="form-input amount-input" id="recAmount" value="${r.amount}" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">日期时间</label>
+        <input type="datetime-local" class="form-input" id="recDate" value="${localDate}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <input type="text" class="form-input" id="recNote" value="${r.note||''}">
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">金额（元）</label>
-      <input type="number" class="form-input amount-input" id="recAmount" value="${r.amount}" step="0.01">
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="updateRecord('${rid}')">更新</button>
+      <button class="btn-danger" onclick="deleteRecord('${rid}')">删除</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">日期时间</label>
-      <input type="datetime-local" class="form-input" id="recDate" value="${localDate}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">备注</label>
-      <input type="text" class="form-input" id="recNote" value="${r.note||''}">
-    </div>
-    <button class="btn-primary" onclick="updateRecord('${rid}')">更新</button>
-    <button class="btn-danger" onclick="deleteRecord('${rid}')">删除</button>
-    <button class="btn-secondary" onclick="closeSheet()">取消</button>
   `);
 }
 
