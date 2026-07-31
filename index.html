@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#6366f1">
+<title>存款记</title>
+<style>
+:root {
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --primary-bg: #eef2ff;
+  --text: #1d1d1f;
+  --text-2: #6e6e73;
+  --text-3: #aeaeb2;
+  --border: #e5e5ea;
+  --green: #34c759;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  --radius: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* ===== 头部 ===== */
+.header {
+  background: var(--card);
+  padding: 16px 20px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 0.5px solid var(--border);
+}
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.app-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.icon-btn:active { transform: scale(0.9); }
+
+/* 总览卡 */
+.total-card {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: 20px;
+  padding: 24px 20px;
+  color: white;
+  margin-bottom: 4px;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+}
+.total-label {
+  font-size: 13px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+.total-amount {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.total-amount .currency {
+  font-size: 18px;
+  font-weight: 600;
+  margin-right: 4px;
+  opacity: 0.9;
+}
+.total-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 12px;
+  opacity: 0.9;
+}
+.total-meta .change-up { color: #d1fae5; }
+.total-meta .change-down { color: #fecaca; }
+
+/* ===== 标签切换 ===== */
+.tabs {
+  display: flex;
+  gap: 6px;
+  padding: 16px 20px 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 0.5px solid var(--border);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.tab .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* ===== 内容区 ===== */
+.content {
+  padding: 0 20px 100px;
+}
+
+/* 项目卡 */
+.project-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s;
+}
+.project-card:active { transform: scale(0.98); }
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.project-info {
+  flex: 1;
+}
+.project-name {
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.project-latest {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.project-change {
+  font-size: 12px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.project-change.up { color: var(--green); }
+.project-change.down { color: var(--red); }
+.project-change.flat { color: var(--text-3); }
+.project-actions {
+  display: flex;
+  gap: 6px;
+}
+.mini-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mini-btn:active { transform: scale(0.9); }
+
+/* 目标进度 */
+.goal-bar {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--border);
+}
+.goal-bar-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+.goal-bar-track {
+  height: 6px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.goal-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--primary-light));
+  border-radius: 3px;
+  transition: width 0.4s;
+}
+
+/* 折线图 */
+.chart-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.chart-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.chart-svg {
+  width: 100%;
+  display: block;
+}
+
+/* 时间轴 */
+.timeline-section { margin-top: 8px; }
+.timeline-date-group {
+  margin-bottom: 20px;
+}
+.timeline-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 8px;
+  padding-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.timeline-date::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.timeline-item {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+.timeline-item-time {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: 2px;
+}
+.timeline-item-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+.timeline-item-amount {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-diff {
+  font-size: 11px;
+  text-align: right;
+  margin-top: 2px;
+}
+.timeline-diff.up { color: var(--green); }
+.timeline-diff.down { color: var(--red); }
+.timeline-diff.flat { color: var(--text-3); }
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-3);
+}
+.empty-state .icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+.empty-state .title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--text-2);
+}
+.empty-state .desc {
+  font-size: 13px;
+}
+
+/* ===== 底部导航 ===== */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 0.5px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0 24px;
+  z-index: 90;
+}
+.nav-item {
+  flex: 1;
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-3);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px;
+}
+.nav-item.active { color: var(--primary); }
+.nav-item .nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  border: none;
+  font-size: 28px;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.4);
+  z-index: 95;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+.fab:active { transform: translateX(-50%) scale(0.9); }
+
+/* ===== 弹层 ===== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.overlay.show {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 1;
+}
+.sheet {
+  background: var(--card);
+  width: 100%;
+  max-width: 430px;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px 32px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.22,0.61,0.36,1);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.overlay.show .sheet { transform: translateY(0); }
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-3);
+  margin: 0 auto 16px;
+  opacity: 0.4;
+}
+.sheet-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* 表单 */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 6px;
+  display: block;
+}
+.form-input, .form-select, .form-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+.form-input.amount-input {
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: -0.5px;
+}
+.color-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.color-option {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.color-option.selected {
+  border-color: var(--text);
+  transform: scale(1.1);
+}
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.8; }
+.btn-secondary {
+  width: 100%;
+  padding: 14px;
+  background: var(--bg);
+  color: var(--text-2);
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.btn-danger {
+  width: 100%;
+  padding: 14px;
+  background: #fef2f2;
+  color: var(--red);
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+/* 数字键盘按钮 */
+.quick-amounts {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.quick-amount {
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 300;
+  transition: transform 0.3s;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* 列表项 */
+.list-item {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+.list-item:active { background: var(--bg); }
+.list-item-info { flex: 1; }
+.list-item-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.list-item-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.list-item-value {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+}
+.list-item-meta {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-2);
+  margin: 20px 0 10px;
+  padding-left: 4px;
+}
+
+.summary-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.summary-box {
+  flex: 1;
+  background: var(--card);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.summary-box-label {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.summary-box-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.summary-box-value.green { color: var(--green); }
+.summary-box-value.red { color: var(--red); }
+
+/* 总目标横幅 */
+.goal-banner {
+  background: var(--card);
+  border-radius: 14px;
+  margin: 12px 0 0;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  overflow: hidden;
+}
+.goal-banner-inner { padding: 14px 16px; }
+.goal-banner-empty {
+  padding: 14px 16px;
+  text-align: center;
+  color: var(--text-3);
+  font-size: 14px;
+}
+.goal-banner-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+.goal-banner-top .pct { font-weight: 700; color: var(--primary); }
+.goal-banner-bottom {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 8px;
+}
+.goal-banner-bottom.done { color: var(--green); font-weight: 600; }
+
+/* 快照页日期选择 */
+.snapshot-date-wrap {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.snapshot-summary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+  border-radius: var(--radius);
+  padding: 20px;
+  color: white;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+}
+.snapshot-summary .sl { font-size: 13px; opacity: 0.85; margin-bottom: 6px; }
+.snapshot-summary .sa {
+  font-size: 30px; font-weight: 800; letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+}
+.snapshot-summary .sa .currency { font-size: 16px; font-weight: 600; margin-right: 4px; opacity: 0.9; }
+.snapshot-summary .sd { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <div class="app-title">存款记</div>
+    <div class="header-actions">
+      <button class="icon-btn" onclick="exportData()" title="导出">↓</button>
+      <button class="icon-btn" onclick="showAddProjectSheet()" title="新增项目">＋</button>
+    </div>
+  </div>
+  <div class="total-card">
+    <div class="total-label">总存款</div>
+    <div class="total-amount"><span class="currency">¥</span><span id="totalAmount">0</span></div>
+    <div class="total-meta">
+      <span id="totalChange">—</span>
+      <span id="totalDate">—</span>
+    </div>
+  </div>
+  <div class="goal-banner" id="goalBanner"></div>
+</div>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="content" id="content"></div>
+
+<button class="fab" onclick="showAddRecordSheet()">＋</button>
+
+<nav class="bottom-nav">
+  <button class="nav-item active" data-page="home" onclick="switchPage('home')">
+    <span class="nav-icon">▦</span><span>项目</span>
+  </button>
+  <button class="nav-item" data-page="snapshot" onclick="switchPage('snapshot')">
+    <span class="nav-icon">📅</span><span>快照</span>
+  </button>
+  <button class="nav-item" data-page="stats" onclick="switchPage('stats')">
+    <span class="nav-icon">◔</span><span>统计</span>
+  </button>
+</nav>
+
+<!-- 弹层 -->
+<div class="overlay" id="overlay">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 数据层 =====
+const STORAGE_KEY = 'deposit_tracker_v1';
+const COLORS = ['#6366f1','#34c759','#ff9500','#ff3b30','#af52de','#00c7be','#ff2d55','#5ac8fa','#ffcc00','#8e8e93'];
+
+let state = {
+  projects: [],
+  records: [],
+  goal: 0,
+  activeTab: 'all',
+  snapshotDate: null
+};
+let currentPage = 'home';
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const data = JSON.parse(raw);
+      state.projects = data.projects || [];
+      state.records = data.records || [];
+      state.goal = data.goal || 0;
+    } catch(e) { seedDemo(); }
+  } else {
+    seedDemo();
+  }
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    projects: state.projects,
+    records: state.records,
+    goal: state.goal || 0
+  }));
+}
+
+function seedDemo() {
+  const now = new Date();
+  const d = (days) => {
+    const x = new Date(now);
+    x.setDate(x.getDate() - days);
+    return x.toISOString();
+  };
+  state.projects = [
+    { id: 'p1', name: '工商银行', color: '#6366f1', createdAt: d(60) },
+    { id: 'p2', name: '支付宝理财', color: '#34c759', createdAt: d(60) },
+    { id: 'p3', name: '现金', color: '#ff9500', createdAt: d(60) }
+  ];
+  state.goal = 200000;
+  state.records = [
+    { id: 'r1', projectId: 'p1', amount: 50000, date: d(50), note: '初始' },
+    { id: 'r2', projectId: 'p1', amount: 55000, date: d(40), note: '工资' },
+    { id: 'r3', projectId: 'p1', amount: 62000, date: d(25), note: '' },
+    { id: 'r4', projectId: 'p1', amount: 68000, date: d(10), note: '奖金' },
+    { id: 'r5', projectId: 'p2', amount: 20000, date: d(45), note: '买入' },
+    { id: 'r6', projectId: 'p2', amount: 24000, date: d(30), note: '' },
+    { id: 'r7', projectId: 'p2', amount: 28500, date: d(15), note: '收益' },
+    { id: 'r8', projectId: 'p2', amount: 31000, date: d(3), note: '' },
+    { id: 'r9', projectId: 'p3', amount: 8000, date: d(40), note: '' },
+    { id: 'r10', projectId: 'p3', amount: 12000, date: d(20), note: '' },
+    { id: 'r11', projectId: 'p3', amount: 10000, date: d(5), note: '开销' }
+  ];
+  saveData();
+}
+
+// ===== 工具 =====
+function fmtMoney(n) {
+  return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return `${d.getMonth()+1}月${d.getDate()}日`;
+}
+function fmtDateFull(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function fmtDateInput(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtDateGroup(iso) {
+  const d = new Date(iso);
+  const today = new Date();
+  const diff = Math.floor((today - d) / 86400000);
+  if (diff === 0) return '今天';
+  if (diff === 1) return '昨天';
+  if (diff < 7) return `${diff}天前`;
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function getProjectRecords(pid) {
+  return state.records
+    .filter(r => r.projectId === pid)
+    .sort((a,b) => new Date(a.date) - new Date(b.date));
+}
+function getLatestRecord(pid) {
+  const recs = getProjectRecords(pid);
+  return recs.length ? recs[recs.length - 1] : null;
+}
+function getPrevRecord(pid, beforeIso) {
+  const recs = getProjectRecords(pid).filter(r => new Date(r.date) < new Date(beforeIso));
+  return recs.length ? recs[recs.length - 1] : null;
+}
+function getTotalLatest() {
+  let total = 0;
+  let latestDate = null;
+  let prevTotal = 0;
+  let hasPrev = false;
+  state.projects.forEach(p => {
+    const latest = getLatestRecord(p.id);
+    if (latest) {
+      total += latest.amount;
+      if (!latestDate || new Date(latest.date) > new Date(latestDate)) latestDate = latest.date;
+      const prev = getPrevRecord(p.id, latest.date);
+      if (prev) { prevTotal += prev.amount; hasPrev = true; }
+    }
+  });
+  return { total, latestDate, prevTotal: hasPrev ? prevTotal : null };
+}
+
+// ===== 渲染 =====
+function render() {
+  renderTabs();
+  renderPage();
+  renderGoalBanner();
+}
+
+function renderTabs() {
+  const tabsEl = document.getElementById('tabs');
+  let html = `<div class="tab ${state.activeTab==='all'?'active':''}" onclick="setTab('all')">全部</div>`;
+  state.projects.forEach(p => {
+    html += `<div class="tab ${state.activeTab===p.id?'active':''}" onclick="setTab('${p.id}')">
+      <span class="dot" style="background:${p.color}"></span>${p.name}
+    </div>`;
+  });
+  tabsEl.innerHTML = html;
+}
+
+function setTab(pid) {
+  state.activeTab = pid;
+  render();
+}
+
+function renderPage() {
+  const isHome = currentPage === 'home';
+  const tc = document.querySelector('.total-card');
+  const gb = document.getElementById('goalBanner');
+  if (tc) tc.style.display = isHome ? '' : 'none';
+  if (gb) gb.style.display = isHome ? '' : 'none';
+  if (currentPage === 'home') renderHome();
+  else if (currentPage === 'snapshot') renderSnapshot();
+  else if (currentPage === 'stats') renderStats();
+  renderTotal();
+  renderGoalBanner();
+}
+
+function renderTotal() {
+  const { total, latestDate, prevTotal } = getTotalLatest();
+  document.getElementById('totalAmount').textContent = fmtMoney(total);
+  const changeEl = document.getElementById('totalChange');
+  const dateEl = document.getElementById('totalDate');
+  if (prevTotal !== null) {
+    const diff = total - prevTotal;
+    const pct = prevTotal ? (diff / prevTotal * 100).toFixed(1) : 0;
+    if (diff > 0) {
+      changeEl.innerHTML = `<span class="change-up">↑ ¥${fmtMoney(diff)} (+${pct}%)</span>`;
+    } else if (diff < 0) {
+      changeEl.innerHTML = `<span class="change-down">↓ ¥${fmtMoney(Math.abs(diff))} (${pct}%)</span>`;
+    } else {
+      changeEl.innerHTML = `<span>持平</span>`;
+    }
+  } else {
+    changeEl.textContent = '暂无对比';
+  }
+  dateEl.textContent = latestDate ? `更新于 ${fmtDate(latestDate)}` : '暂无记录';
+}
+
+function renderHome() {
+  const content = document.getElementById('content');
+  let projects = state.activeTab === 'all' ? state.projects : state.projects.filter(p => p.id === state.activeTab);
+  
+  if (projects.length === 0) {
+    content.innerHTML = `<div class="empty-state">
+      <div class="icon">📔</div>
+      <div class="title">还没有项目</div>
+      <div class="desc">点击右上角"＋"创建第一个存款项目</div>
+    </div>`;
+    return;
+  }
+
+  let html = '';
+  projects.forEach(p => {
+    const recs = getProjectRecords(p.id);
+    const latest = recs.length ? recs[recs.length-1] : null;
+    const prev = latest ? getPrevRecord(p.id, latest.date) : null;
+    let changeHtml = '<div class="project-change flat">暂无数据</div>';
+    if (latest && prev) {
+      const diff = latest.amount - prev.amount;
+      const pct = prev.amount ? (diff/prev.amount*100).toFixed(1) : 0;
+      if (diff > 0) changeHtml = `<div class="project-change up">↑ ¥${fmtMoney(diff)} (+${pct}%)</div>`;
+      else if (diff < 0) changeHtml = `<div class="project-change down">↓ ¥${fmtMoney(Math.abs(diff))} (${pct}%)</div>`;
+      else changeHtml = `<div class="project-change flat">— 持平</div>`;
+    } else if (latest) {
+      changeHtml = `<div class="project-change flat">初始记录</div>`;
+    }
+    const latestAmount = latest ? latest.amount : 0;
+
+    html += `<div class="project-card" onclick="showProjectDetail('${p.id}')">
+      <div class="project-header">
+        <div class="project-info">
+          <div class="project-name"><span class="project-color" style="background:${p.color}"></span>${p.name}</div>
+          <div class="project-latest">¥${fmtMoney(latestAmount)}</div>
+          ${changeHtml}
+        </div>
+        <div class="project-actions" onclick="event.stopPropagation()">
+          <button class="mini-btn" onclick="showAddRecordSheet('${p.id}')" title="记一笔">＋</button>
+          <button class="mini-btn" onclick="showProjectDetail('${p.id}')" title="详情">›</button>
+        </div>
+      </div>
+    </div>`;
+  });
+  content.innerHTML = html;
+}
+
+// 取某日期（含当天）各项目余额快照
+function getSnapshotAtDate(dateStr) {
+  // dateStr: YYYY-MM-DD，截止当天 23:59:59
+  const parts = dateStr.split('-');
+  const cutoff = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59).getTime();
+  const items = [];
+  let total = 0;
+  state.projects.forEach(p => {
+    const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getTime() <= cutoff);
+    if (recs.length) {
+      const latest = recs[recs.length - 1];
+      items.push({ project: p, amount: latest.amount, record: latest });
+      total += latest.amount;
+    } else {
+      items.push({ project: p, amount: null, record: null });
+    }
+  });
+  return { items, total };
+}
+
+function renderSnapshot() {
+  const content = document.getElementById('content');
+  const todayStr = fmtDateInput(new Date());
+  const selected = state.snapshotDate || todayStr;
+  const snap = getSnapshotAtDate(selected);
+  const dayHasAny = snap.items.some(i => i.record !== null);
+
+  let html = `<div class="snapshot-date-wrap">
+    <label class="form-label">选择日期，查看当天各项目存款</label>
+    <input type="date" class="form-input" id="snapshotDate" value="${selected}" max="${todayStr}" onchange="onSnapshotDateChange(this.value)">
+  </div>`;
+
+  // 合计卡
+  html += `<div class="snapshot-summary">
+    <div class="sl">${selected} 总存款快照</div>
+    <div class="sa"><span class="currency">¥</span>${fmtMoney(snap.total)}</div>
+    <div class="sd">${dayHasAny ? '该日及之前最后一次记录合计' : '该日期暂无记录'}</div>
+  </div>`;
+
+  if (!dayHasAny) {
+    html += `<div class="empty-state">
+      <div class="icon">📅</div>
+      <div class="title">${selected} 没有存款记录</div>
+      <div class="desc">在此之前还没有任何记录，试试选择更晚的日期</div>
+    </div>`;
+    content.innerHTML = html;
+    return;
+  }
+
+  // 各项目快照
+  snap.items.forEach(item => {
+    const hasRec = item.record !== null;
+    const amountTxt = hasRec ? `¥${fmtMoney(item.amount)}` : '暂无记录';
+    const noteTxt = hasRec && item.record.note ? `<div class="project-change flat">备注：${item.record.note}</div>` : '';
+    html += `<div class="project-card" onclick="${hasRec ? `editRecord('${item.record.id}')` : ''}">
+      <div class="project-header">
+        <div class="project-info">
+          <div class="project-name"><span class="project-color" style="background:${item.project.color}"></span>${item.project.name}</div>
+          <div class="project-latest">${amountTxt}</div>
+          ${noteTxt}
+        </div>
+        ${hasRec ? `<div class="project-actions" onclick="event.stopPropagation()">
+          <button class="mini-btn" onclick="editRecord('${item.record.id}')" title="编辑">›</button>
+        </div>` : ''}
+      </div>
+    </div>`;
+  });
+
+  content.innerHTML = html;
+}
+
+function onSnapshotDateChange(val) {
+  state.snapshotDate = val;
+  renderSnapshot();
+}
+
+function renderGoalBanner() {
+  const el = document.getElementById('goalBanner');
+  if (!el) return;
+  if (!state.goal || state.goal <= 0) {
+    el.innerHTML = `<div class="goal-banner-empty" onclick="showSetGoalSheet()">＋ 设置总存款目标</div>`;
+    return;
+  }
+  const { total } = getTotalLatest();
+  const pct = Math.min(100, (total / state.goal) * 100);
+  const remain = state.goal - total;
+  const done = remain <= 0;
+  el.innerHTML = `<div class="goal-banner-inner" onclick="showSetGoalSheet()">
+    <div class="goal-banner-top">
+      <span>总目标 ¥${fmtMoney(state.goal)}</span>
+      <span class="pct">${pct.toFixed(1)}%</span>
+    </div>
+    <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+    <div class="goal-banner-bottom ${done ? 'done' : ''}">${done ? '🎉 已达成总存款目标！' : '还差 ¥' + fmtMoney(remain) + ' 达成'}</div>
+  </div>`;
+}
+
+function showSetGoalSheet() {
+  openSheet(`
+    <div class="sheet-title">设置总存款目标</div>
+    <div class="form-group">
+      <label class="form-label">目标金额（元，可填负数）</label>
+      <input type="number" class="form-input amount-input" id="goalInput" value="${state.goal || ''}" step="0.01" placeholder="如：500000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">快捷设置</label>
+      <div class="quick-amounts">
+        <span class="quick-amount" onclick="document.getElementById('goalInput').value=100000">10万</span>
+        <span class="quick-amount" onclick="document.getElementById('goalInput').value=200000">20万</span>
+        <span class="quick-amount" onclick="document.getElementById('goalInput').value=500000">50万</span>
+        <span class="quick-amount" onclick="document.getElementById('goalInput').value=1000000">100万</span>
+        <span class="quick-amount" onclick="document.getElementById('goalInput').value=0">清除</span>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveGoal()">保存</button>
+    <button class="btn-secondary" onclick="closeSheet()">取消</button>
+  `);
+}
+
+function saveGoal() {
+  const val = parseFloat(document.getElementById('goalInput').value) || 0;
+  state.goal = val;
+  saveData();
+  closeSheet();
+  render();
+  toast('总目标已更新');
+}
+
+function renderStats() {
+  const content = document.getElementById('content');
+  let projects = state.activeTab === 'all' ? state.projects : state.projects.filter(p => p.id === state.activeTab);
+  
+  if (projects.length === 0 || state.records.length === 0) {
+    content.innerHTML = `<div class="empty-state">
+      <div class="icon">📊</div>
+      <div class="title">暂无统计数据</div>
+      <div class="desc">添加记录后可查看趋势分析</div>
+    </div>`;
+    return;
+  }
+
+  // 计算各项目最新值
+  const totals = projects.map(p => {
+    const latest = getLatestRecord(p.id);
+    return { project: p, amount: latest ? latest.amount : 0 };
+  });
+  const grandTotal = totals.reduce((s,t) => s + t.amount, 0);
+
+  // 总体环比
+  const { prevTotal } = getTotalLatest();
+  let totalDiff = 0, totalPct = 0;
+  if (prevTotal !== null && prevTotal > 0) {
+    totalDiff = grandTotal - prevTotal;
+    totalPct = totalDiff / prevTotal * 100;
+  }
+
+  let goalCard = '';
+  if (state.goal > 0) {
+    const { total } = getTotalLatest();
+    const pct = Math.min(100, total / state.goal * 100);
+    const remain = state.goal - total;
+    const done = remain <= 0;
+    goalCard = `<div class="chart-card" style="margin-bottom:12px;">
+      <div class="chart-title">总目标进度</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:8px;">
+        <span>目标 ¥${fmtMoney(state.goal)}</span>
+        <span style="font-weight:700;color:var(--primary)">${pct.toFixed(1)}%</span>
+      </div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      <div style="font-size:12px;color:${done?'var(--green)':'var(--text-3)'};margin-top:8px;${done?'font-weight:600':''}">${done?'🎉 已达成总存款目标！':'还差 ¥'+fmtMoney(remain)+' 达成'}</div>
+    </div>`;
+  }
+
+  let html = `${goalCard}
+    <button class="btn-secondary" style="margin-bottom:12px;background:var(--primary-bg);color:var(--primary);" onclick="showSetGoalSheet()">⚙ 设置总存款目标${state.goal>0?`（¥${fmtMoney(state.goal)}）`:''}</button>
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="summary-box-label">当前总额</div>
+        <div class="summary-box-value">¥${fmtMoney(grandTotal)}</div>
+      </div>
+      <div class="summary-box">
+        <div class="summary-box-label">较上次</div>
+        <div class="summary-box-value ${totalDiff>0?'green':totalDiff<0?'red':''}">${totalDiff>0?'↑':totalDiff<0?'↓':'—'} ${totalDiff!==0?'¥'+fmtMoney(Math.abs(totalDiff)):'0'}</div>
+      </div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-box">
+        <div class="summary-box-label">环比变化</div>
+        <div class="summary-box-value ${totalPct>0?'green':totalPct<0?'red':''}">${totalPct>0?'+':''}${totalPct.toFixed(1)}%</div>
+      </div>
+      <div class="summary-box">
+        <div class="summary-box-label">项目数</div>
+        <div class="summary-box-value">${projects.length}</div>
+      </div>
+    </div>
+  `;
+
+  // 趋势图 - 合并所有项目按时间
+  html += `<div class="chart-card">
+    <div class="chart-title">总存款趋势</div>
+    <div id="trendChart"></div>
+  </div>`;
+
+  // 各项目占比饼图
+  html += `<div class="chart-card">
+    <div class="chart-title">项目占比</div>
+    <div id="pieChart"></div>
+  </div>`;
+
+  // 各项目明细
+  html += `<div class="section-title">项目明细</div>`;
+  totals.sort((a,b) => b.amount - a.amount).forEach(t => {
+    const pct = grandTotal ? t.amount/grandTotal*100 : 0;
+    const recs = getProjectRecords(t.project.id);
+    const latest = recs.length ? recs[recs.length-1] : null;
+    const prev = latest ? getPrevRecord(t.project.id, latest.date) : null;
+    let diffTxt = '—';
+    let diffCls = '';
+    if (latest && prev) {
+      const d = latest.amount - prev.amount;
+      if (d > 0) { diffTxt = `↑¥${fmtMoney(d)}`; diffCls = 'green'; }
+      else if (d < 0) { diffTxt = `↓¥${fmtMoney(Math.abs(d))}`; diffCls = 'red'; }
+      else diffTxt = '持平';
+    }
+    html += `<div class="list-item" onclick="showProjectDetail('${t.project.id}')">
+      <div class="list-item-info">
+        <div class="list-item-title"><span class="project-color" style="background:${t.project.color}"></span>${t.project.name}</div>
+        <div class="list-item-sub">${recs.length}条记录 · 占比${pct.toFixed(1)}%</div>
+      </div>
+      <div>
+        <div class="list-item-value">¥${fmtMoney(t.amount)}</div>
+        <div class="list-item-meta ${diffCls}">${diffTxt}</div>
+      </div>
+    </div>`;
+  });
+
+  content.innerHTML = html;
+
+  // 绘制图表
+  drawTrendChart();
+  drawPieChart(totals, grandTotal);
+}
+
+function drawTrendChart() {
+  const container = document.getElementById('trendChart');
+  if (!container) return;
+
+  let projects = state.activeTab === 'all' ? state.projects : state.projects.filter(p => p.id === state.activeTab);
+  const allDates = [...new Set(state.records.filter(r => state.activeTab==='all' || r.projectId===state.activeTab).map(r => fmtDateFull(r.date)))].sort();
+
+  if (allDates.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
+
+  // 对每个日期，计算该日期及之前每个项目的最新值之和
+  const points = allDates.map(d => {
+    const dTime = new Date(d).getTime() + 86400000;
+    let total = 0;
+    projects.forEach(p => {
+      const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getTime() < dTime);
+      if (recs.length) total += recs[recs.length-1].amount;
+    });
+    return { date: d, total };
+  });
+
+  // 限制最近30个点
+  const showPoints = points.slice(-30);
+  const w = 350, h = 180, pad = { l: 42, r: 10, t: 16, b: 28 };
+  const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
+  const max = Math.max(...showPoints.map(p => p.total), 0);
+  const min = Math.min(0, ...showPoints.map(p => p.total));
+  const range = max - min || 1;
+  const xStep = showPoints.length > 1 ? cw / (showPoints.length - 1) : 0;
+  const barW = Math.max(6, Math.min(28, xStep * 0.6));
+  const baseY = pad.t + ch - (0 - min) / range * ch;
+
+  let svg = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg">`;
+  // Y轴网格
+  const yLabels = [max, (max + min) / 2, min];
+  yLabels.forEach(v => {
+    const y = pad.t + ch - (v - min) / range * ch;
+    svg += `<line x1="${pad.l}" y1="${y}" x2="${w-pad.r}" y2="${y}" stroke="#f0f0f0" stroke-width="1"/>`;
+    svg += `<text x="${pad.l-5}" y="${y+3}" font-size="9" fill="#aeaeb2" text-anchor="end">¥${v>=10000?(v/10000).toFixed(1)+'万':Math.round(v)}</text>`;
+  });
+  // 0 基线
+  svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="#cfcfcf" stroke-width="1"/>`;
+  // 柱体
+  showPoints.forEach((p, i) => {
+    const x = pad.l + i * xStep;
+    const y = pad.t + ch - (p.total - min) / range * ch;
+    const top = Math.min(y, baseY);
+    const barH = Math.max(2, Math.abs(y - baseY));
+    const fill = p.total >= 0 ? '#6366f1' : '#ff3b30';
+    const rx = Math.min(3, barW / 2);
+    svg += `<rect x="${(x - barW/2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="${rx}" fill="${fill}"/>`;
+  });
+  // X轴日期
+  const labelCount = Math.min(4, showPoints.length);
+  for (let i = 0; i < labelCount; i++) {
+    const idx = labelCount === 1 ? 0 : Math.floor(i * (showPoints.length-1) / (labelCount-1));
+    const x = pad.l + idx * xStep;
+    svg += `<text x="${x}" y="${h-8}" font-size="9" fill="#aeaeb2" text-anchor="middle">${fmtDate(showPoints[idx].date)}</text>`;
+  }
+  svg += `</svg>`;
+  container.innerHTML = svg;
+}
+
+function drawPieChart(totals, grandTotal) {
+  const container = document.getElementById('pieChart');
+  if (!container || grandTotal === 0) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
+
+  const w = 320, h = 200, cx = 92, cy = 100, r = 80;
+  let angle = -Math.PI / 2;
+  let svg = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg">`;
+
+  totals.filter(t => t.amount > 0).forEach(t => {
+    const pct = t.amount / grandTotal;
+    if (pct >= 0.999) {
+      // 单项占比100%时画整圆，避免弧线起止点重合画不出
+      svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${t.project.color}"/>`;
+      return;
+    }
+    const endAngle = angle + pct * Math.PI * 2;
+    const x1 = cx + r * Math.cos(angle), y1 = cy + r * Math.sin(angle);
+    const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+    const large = pct > 0.5 ? 1 : 0;
+    svg += `<path d="M ${cx} ${cy} L ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${t.project.color}"/>`;
+    angle = endAngle;
+  });
+
+  // 图例
+  svg += `<text x="200" y="18" font-size="12" font-weight="700" fill="#1d1d1f">合计 ¥${grandTotal>=10000?(grandTotal/10000).toFixed(1)+'万':Math.round(grandTotal)}</text>`;
+  let legendY = 42;
+  totals.filter(t => t.amount > 0).forEach(t => {
+    const pct = (t.amount/grandTotal*100).toFixed(1);
+    svg += `<rect x="200" y="${legendY-9}" width="10" height="10" rx="2" fill="${t.project.color}"/>`;
+    svg += `<text x="216" y="${legendY}" font-size="11" fill="#1d1d1f">${t.project.name}</text>`;
+    svg += `<text x="216" y="${legendY+13}" font-size="10" fill="#aeaeb2">¥${fmtMoney(t.amount)} · ${pct}%</text>`;
+    legendY += 34;
+  });
+  svg += `</svg>`;
+  container.innerHTML = svg;
+}
+
+// ===== 页面切换 =====
+function switchPage(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  renderPage();
+}
+
+// ===== 弹层 =====
+function openSheet(html) {
+  document.getElementById('sheet').innerHTML = `<div class="sheet-handle"></div>${html}`;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeSheet() {
+  document.getElementById('overlay').classList.remove('show');
+}
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ===== 添加记录 =====
+function showAddRecordSheet(pid) {
+  const projectOptions = state.projects.map(p => 
+    `<option value="${p.id}" ${pid===p.id?'selected':''}>${p.name}</option>`
+  ).join('');
+  const now = new Date();
+  const localNow = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+
+  openSheet(`
+    <div class="sheet-title">记一笔</div>
+    <div class="form-group">
+      <label class="form-label">选择项目</label>
+      <select class="form-select" id="recProject">
+        <option value="">请选择项目</option>
+        ${projectOptions}
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">金额（元）</label>
+      <input type="number" class="form-input amount-input" id="recAmount" placeholder="0.00（可填负数）" step="0.01">
+      <div class="quick-amounts">
+        <span class="quick-amount" onclick="document.getElementById('recAmount').value=1000">+1千</span>
+        <span class="quick-amount" onclick="document.getElementById('recAmount').value=10000">+1万</span>
+        <span class="quick-amount" onclick="document.getElementById('recAmount').value=50000">+5万</span>
+        <span class="quick-amount" onclick="document.getElementById('recAmount').value=100000">+10万</span>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">日期时间</label>
+      <input type="datetime-local" class="form-input" id="recDate" value="${localNow}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">备注（选填）</label>
+      <input type="text" class="form-input" id="recNote" placeholder="如：工资、理财收益、开销...">
+    </div>
+    <button class="btn-primary" onclick="saveRecord()">保存</button>
+    <button class="btn-secondary" onclick="closeSheet()">取消</button>
+  `);
+}
+
+function saveRecord() {
+  const pid = document.getElementById('recProject').value;
+  const amount = parseFloat(document.getElementById('recAmount').value);
+  const date = document.getElementById('recDate').value;
+  const note = document.getElementById('recNote').value.trim();
+
+  if (!pid) { toast('请选择项目'); return; }
+  if (isNaN(amount)) { toast('请输入有效金额'); return; }
+  if (!date) { toast('请选择日期'); return; }
+
+  state.records.push({
+    id: uid(),
+    projectId: pid,
+    amount: amount,
+    date: new Date(date).toISOString(),
+    note: note
+  });
+  saveData();
+  closeSheet();
+  render();
+  toast('记录已保存');
+}
+
+function editRecord(rid) {
+  const r = state.records.find(x => x.id === rid);
+  if (!r) return;
+  const projectOptions = state.projects.map(p => 
+    `<option value="${p.id}" ${r.projectId===p.id?'selected':''}>${p.name}</option>`
+  ).join('');
+  const d = new Date(r.date);
+  const localDate = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+
+  openSheet(`
+    <div class="sheet-title">编辑记录</div>
+    <div class="form-group">
+      <label class="form-label">选择项目</label>
+      <select class="form-select" id="recProject">${projectOptions}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">金额（元）</label>
+      <input type="number" class="form-input amount-input" id="recAmount" value="${r.amount}" step="0.01">
+    </div>
+    <div class="form-group">
+      <label class="form-label">日期时间</label>
+      <input type="datetime-local" class="form-input" id="recDate" value="${localDate}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">备注</label>
+      <input type="text" class="form-input" id="recNote" value="${r.note||''}">
+    </div>
+    <button class="btn-primary" onclick="updateRecord('${rid}')">更新</button>
+    <button class="btn-danger" onclick="deleteRecord('${rid}')">删除</button>
+    <button class="btn-secondary" onclick="closeSheet()">取消</button>
+  `);
+}
+
+function updateRecord(rid) {
+  const r = state.records.find(x => x.id === rid);
+  if (!r) return;
+  const pid = document.getElementById('recProject').value;
+  const amount = parseFloat(document.getElementById('recAmount').value);
+  const date = document.getElementById('recDate').value;
+  const note = document.getElementById('recNote').value.trim();
+
+  if (!pid) { toast('请选择项目'); return; }
+  if (isNaN(amount)) { toast('请输入有效金额'); return; }
+
+  r.projectId = pid;
+  r.amount = amount;
+  r.date = new Date(date).toISOString();
+  r.note = note;
+  saveData();
+  closeSheet();
+  render();
+  toast('已更新');
+}
+
+function deleteRecord(rid) {
+  state.records = state.records.filter(r => r.id !== rid);
+  saveData();
+  closeSheet();
+  render();
+  toast('已删除');
+}
+
+// ===== 项目管理 =====
+function showAddProjectSheet() {
+  let colorHtml = COLORS.map((c,i) => 
+    `<div class="color-option ${i===0?'selected':''}" style="background:${c}" onclick="selectColor(this,'${c}')" data-color="${c}"></div>`
+  ).join('');
+  openSheet(`
+    <div class="sheet-title">新建项目</div>
+    <div class="form-group">
+      <label class="form-label">项目名称</label>
+      <input type="text" class="form-input" id="projName" placeholder="如：工资卡、理财、现金...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">颜色标签</label>
+      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    </div>
+    <button class="btn-primary" onclick="saveProject()">创建</button>
+    <button class="btn-secondary" onclick="closeSheet()">取消</button>
+  `);
+}
+
+function selectColor(el, color) {
+  document.querySelectorAll('.color-option').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function saveProject() {
+  const name = document.getElementById('projName').value.trim();
+  const colorEl = document.querySelector('.color-option.selected');
+  const color = colorEl ? colorEl.dataset.color : '#6366f1';
+
+  if (!name) { toast('请输入项目名称'); return; }
+
+  state.projects.push({
+    id: uid(),
+    name: name,
+    color: color,
+    createdAt: new Date().toISOString()
+  });
+  saveData();
+  closeSheet();
+  render();
+  toast('项目已创建');
+}
+
+function showProjectDetail(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  const recs = getProjectRecords(pid);
+  const latest = recs.length ? recs[recs.length-1] : null;
+  const amount = latest ? latest.amount : 0;
+
+  // 占比（相对当前总额）
+  const { total } = getTotalLatest();
+  const sharePct = total ? (amount / total * 100) : 0;
+
+  let colorHtml = COLORS.map(c => 
+    `<div class="color-option ${c===p.color?'selected':''}" style="background:${c}" onclick="selectColor(this,'${c}')" data-color="${c}"></div>`
+  ).join('');
+
+  openSheet(`
+    <div class="sheet-title">项目详情</div>
+    <div class="form-group">
+      <label class="form-label">项目名称</label>
+      <input type="text" class="form-input" id="editProjName" value="${p.name}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">颜色标签</label>
+      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    </div>
+    <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+        <span>当前余额</span><span>¥${fmtMoney(amount)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+        <span>占总存款比例</span><span>${sharePct.toFixed(1)}%</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);">
+        <span>记录数</span><span>${recs.length} 条</span>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="updateProject('${pid}')">保存修改</button>
+    <button class="btn-primary" style="background:var(--green)" onclick="showAddRecordSheet('${pid}')">＋ 记一笔</button>
+    <button class="btn-danger" onclick="deleteProject('${pid}')">删除项目</button>
+    <button class="btn-secondary" onclick="closeSheet()">关闭</button>
+  `);
+}
+
+function updateProject(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  const name = document.getElementById('editProjName').value.trim();
+  const colorEl = document.querySelector('.color-option.selected');
+  const color = colorEl ? colorEl.dataset.color : p.color;
+
+  if (!name) { toast('请输入项目名称'); return; }
+  p.name = name;
+  p.color = color;
+  saveData();
+  closeSheet();
+  render();
+  toast('已保存');
+}
+
+function deleteProject(pid) {
+  if (state.records.some(r => r.projectId === pid)) {
+    if (!confirm('该项目下有记录，删除后记录也会一并删除，确认删除？')) return;
+  }
+  state.projects = state.projects.filter(p => p.id !== pid);
+  state.records = state.records.filter(r => r.projectId !== pid);
+  if (state.activeTab === pid) state.activeTab = 'all';
+  saveData();
+  closeSheet();
+  render();
+  toast('项目已删除');
+}
+
+// ===== 导出 =====
+function exportData() {
+  if (state.records.length === 0 && state.projects.length === 0) {
+    toast('暂无数据可导出');
+    return;
+  }
+
+  // CSV
+  let csv = '\ufeff项目名称,金额,日期,备注\n';
+  state.records.forEach(r => {
+    const p = state.projects.find(x => x.id === r.projectId);
+    const name = p ? p.name : '已删除';
+    csv += `${name},${r.amount},${fmtDateFull(r.date)} ${fmtTime(r.date)},${r.note||''}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `存款记录_${fmtDateFull(new Date().toISOString())}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // 同时导出JSON备份
+  const json = JSON.stringify({ projects: state.projects, records: state.records, exportedAt: new Date().toISOString() }, null, 2);
+  const blob2 = new Blob([json], { type: 'application/json' });
+  const url2 = URL.createObjectURL(blob2);
+  const a2 = document.createElement('a');
+  a2.href = url2;
+  a2.download = `存款备份_${fmtDateFull(new Date().toISOString())}.json`;
+  a2.click();
+  URL.revokeObjectURL(url2);
+
+  toast('已导出CSV和JSON备份');
+}
+
+// ===== 初始化 =====
+loadData();
+render();
+
+// 点击遮罩关闭
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'overlay') closeSheet();
+});
+</script>
+</body>
+</html>
