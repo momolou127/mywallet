@@ -430,11 +430,48 @@ body {
   width: 100%;
   max-width: 430px;
   border-radius: 20px 20px 0 0;
-  padding: 20px 20px 32px;
+  padding: 20px 20px 16px;
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.22,0.61,0.36,1);
   max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 由内部 sheet-body 接管滚动 */
+}
+.sheet-body {
+  flex: 1 1 auto;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.sheet-body::-webkit-scrollbar { width: 4px; }
+.sheet-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* 底部固定按钮栏（项目详情页专用） */
+.sheet-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 0.5px solid var(--border);
+  margin-top: 8px;
+  background: var(--card);
+}
+.sheet-actions .btn-primary,
+.sheet-actions .btn-secondary,
+.sheet-actions .btn-danger {
+  flex: 1;
+  margin: 0;
+  padding: 12px 4px;
+  font-size: 14px;
+  white-space: nowrap;
+  border-radius: 12px;
+}
+.sheet-actions .btn-danger {
+  background: #fef2f2;
+  color: var(--red);
+  font-weight: 500;
 }
 .overlay.show .sheet { transform: translateY(0); }
 .sheet-handle {
@@ -1575,28 +1612,41 @@ function showProjectDetail(pid) {
   ).join('');
 
   openSheet(`
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
       <div style="width:18px;height:18px;border-radius:6px;background:${p.color};flex-shrink:0;"></div>
-      <div class="sheet-title" style="margin:0;flex:1;">${p.name}</div>
-      <button class="mini-btn" onclick="showProjectMenu('${pid}')" title="项目操作" style="font-size:18px;color:var(--text-2);">⋯</button>
+      <div class="sheet-title" style="margin:0;flex:1;">项目详情</div>
     </div>
-    <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-        <span>当前余额</span><span>¥${fmtMoney(amount)}</span>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">项目名称</label>
+        <input type="text" class="form-input" id="editProjName" value="${p.name}" maxlength="20">
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-        <span>占总存款比例</span><span>${sharePct.toFixed(1)}%</span>
+      <div class="form-group">
+        <label class="form-label">颜色标签</label>
+        <div class="color-picker" id="colorPicker">${colorHtml}</div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);">
-        <span>记录数</span><span>${recs.length} 条</span>
+      <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>当前余额</span><span>¥${fmtMoney(amount)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>占总存款比例</span><span>${sharePct.toFixed(1)}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);">
+          <span>记录数</span><span>${recs.length} 条</span>
+        </div>
+      </div>
+      <div class="section-title" style="margin:18px 0 8px;padding-left:4px;">全部记录（${recs.length}）</div>
+      <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">
+        ${listHtml}
       </div>
     </div>
-    <div class="section-title" style="margin:18px 0 8px;padding-left:4px;">全部记录（${recs.length}）</div>
-    <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;">
-      ${listHtml}
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="updateProject('${pid}')">保存修改</button>
+      <button class="btn-primary" style="background:var(--green)" onclick="showAddRecordSheet('${pid}')">＋记一笔</button>
+      <button class="btn-danger" onclick="deleteProject('${pid}')">删除</button>
+      <button class="btn-secondary" onclick="closeSheet()">关闭</button>
     </div>
-    <button class="btn-primary" style="background:var(--green)" onclick="showAddRecordSheet('${pid}')">＋ 记一笔</button>
-    <button class="btn-secondary" onclick="closeSheet()">关闭</button>
   `);
 }
 
