@@ -483,17 +483,21 @@ body {
   letter-spacing: -0.5px;
 }
 .color-picker {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
+  padding: 0;
 }
 .color-option {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  aspect-ratio: 1 / 1;
+  width: 100%;
+  max-width: 36px;
+  justify-self: center;
+  border-radius: 8px;
   border: 3px solid transparent;
   cursor: pointer;
   transition: transform 0.15s;
+  box-sizing: border-box;
 }
 .color-option.selected {
   border-color: var(--text);
@@ -680,6 +684,30 @@ body {
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+/* 日期输入框：避免 iOS Safari 原生日历图标溢出 */
+.snapshot-date-wrap input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  padding-right: 40px; /* 给日历图标留位 */
+  min-height: 46px;
+}
+.snapshot-date-wrap input[type="date"]::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.55;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+}
+/* 桌面端浏览器（Chrome/Edge/Firefox）下的同款样式，保持一致 */
+.snapshot-date-wrap input[type="date"]::-webkit-inner-spin-button,
+.snapshot-date-wrap input[type="date"]::-webkit-clear-button {
+  display: none;
 }
 .snapshot-summary {
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
@@ -747,7 +775,8 @@ body {
 <script>
 // ===== 数据层 =====
 const STORAGE_KEY = 'deposit_tracker_v1';
-const COLORS = ['#6366f1','#34c759','#ff9500','#ff3b30','#af52de','#00c7be','#ff2d55','#5ac8fa','#ffcc00','#8e8e93'];
+// 8 色一行排满：移除红、灰（与其他色相冲/不直观）
+const COLORS = ['#6366f1','#34c759','#ff9500','#af52de','#00c7be','#ff2d55','#5ac8fa','#ffcc00'];
 
 let state = {
   projects: [],
@@ -1319,6 +1348,11 @@ function drawPieChart(totals, grandTotal) {
 function switchPage(page) {
   currentPage = page;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  // 每次切换 tab 都从最顶部开始展示
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  // body 上的 scrollTop 兼容（部分浏览器）
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
   renderPage();
 }
 
@@ -1657,8 +1691,44 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('SW 注册失败:', err));
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
+      reg.addEventListener('updatefound', () => {
+        const newSw = reg.installing;
+        if (!newSw) return;
+        newSw.addEventListener('statechange', () => {
+          if (newSw.state === 'activated') {
+            // 新 SW 已激活，下次访问就是新版；当前页强制刷新一次以立刻看到
+            if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+            console.log('存款记：检测到新版本，已激活');
+          }
+        });
+      });
+      // 监听 controller 变化（新 SW 接管），自动刷新页面
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }).catch((err) => console.warn('SW 注册失败:', err));
   });
+
+  // 提供一个手动清缓存入口（仅在用户主动调用时触发）
+  window.clearAppCache = async function() {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+      const keys = await caches.keys();
+      for (const k of keys) await caches.delete(k);
+      localStorage.removeItem('__cacheClearedAt');
+      localStorage.setItem('__cacheClearedAt', String(Date.now()));
+      return true;
+    } catch (e) {
+      console.error('清缓存失败', e);
+      return false;
+    }
+  };
 }
 </script>
 </body>
