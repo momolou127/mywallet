@@ -1066,7 +1066,17 @@ function renderSnapshot() {
   const todayStr = fmtDateInput(new Date());
   const selected = state.snapshotDate || todayStr;
   const snap = getSnapshotAtDate(selected);
-  const dayHasAny = snap.items.some(i => i.record !== null);
+
+  // 按顶部 tab 筛选（与首页/统计页一致）
+  let items = snap.items;
+  let activeProj = null;
+  if (state.activeTab !== 'all') {
+    activeProj = state.projects.find(p => p.id === state.activeTab) || null;
+    items = items.filter(i => i.project.id === state.activeTab);
+  }
+  const snapTotal = items.reduce((s, i) => s + (i.amount || 0), 0);
+  const dayHasAny = items.some(i => i.record !== null);
+  const summaryTitle = activeProj ? `${selected} ${activeProj.name} 存款快照` : `${selected} 总存款快照`;
 
   let html = `<div class="snapshot-date-wrap">
     <label class="form-label">选择日期，查看当天各项目存款</label>
@@ -1075,8 +1085,8 @@ function renderSnapshot() {
 
   // 合计卡
   html += `<div class="snapshot-summary">
-    <div class="sl">${selected} 总存款快照</div>
-    <div class="sa"><span class="currency">¥</span>${fmtMoney(snap.total)}</div>
+    <div class="sl">${summaryTitle}</div>
+    <div class="sa"><span class="currency">¥</span>${fmtMoney(snapTotal)}</div>
     <div class="sd">${dayHasAny ? '该日及之前最后一次记录合计' : '该日期暂无记录'}</div>
   </div>`;
 
@@ -1091,7 +1101,7 @@ function renderSnapshot() {
   }
 
   // 各项目快照
-  snap.items.forEach(item => {
+  items.forEach(item => {
     const hasRec = item.record !== null;
     const amountTxt = hasRec ? `¥${fmtMoney(item.amount)}` : '暂无记录';
     const noteTxt = hasRec && item.record.note ? `<div class="project-change flat">备注：${item.record.note}</div>` : '';
@@ -1201,25 +1211,31 @@ function renderStats() {
     totalPct = totalDiff / prevTotal * 100;
   }
 
+  // 总目标进度卡（始终显示，点击卡片即可设置/修改，不再单独一行按钮）
+  const { total: goalTotal } = getTotalLatest();
   let goalCard = '';
   if (state.goal > 0) {
-    const { total } = getTotalLatest();
-    const pct = Math.min(100, total / state.goal * 100);
-    const remain = state.goal - total;
+    const pct = Math.min(100, goalTotal / state.goal * 100);
+    const remain = state.goal - goalTotal;
     const done = remain <= 0;
-    goalCard = `<div class="chart-card" style="margin-bottom:12px;">
+    goalCard = `<div class="chart-card goal-card" style="margin-bottom:12px;cursor:pointer;" onclick="showSetGoalSheet()">
       <div class="chart-title">总目标进度</div>
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:8px;">
         <span>目标 ¥${fmtMoney(state.goal)}</span>
         <span style="font-weight:700;color:var(--primary)">${pct.toFixed(1)}%</span>
       </div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
-      <div style="font-size:12px;color:${done?'var(--green)':'var(--text-3)'};margin-top:8px;${done?'font-weight:600':''}">${done?'🎉 已达成总存款目标！':'还差 ¥'+fmtMoney(remain)+' 达成'}</div>
+      <div style="font-size:12px;color:${done?'var(--green)':'var(--text-3)'};margin-top:8px;${done?'font-weight:600':''}">${done?'🎉 已达成总存款目标！':'还差 ¥'+fmtMoney(remain)+' 达成'} · 点击修改</div>
+    </div>`;
+  } else {
+    goalCard = `<div class="chart-card goal-card" style="margin-bottom:12px;cursor:pointer;text-align:center;color:var(--primary);" onclick="showSetGoalSheet()">
+      <div class="chart-title">总存款目标</div>
+      <div style="font-size:13px;padding:10px 0 2px;">＋ 点击设置总存款目标</div>
     </div>`;
   }
 
   let html = `${goalCard}
-    <button class="btn-secondary" style="margin-bottom:12px;background:var(--primary-bg);color:var(--primary);" onclick="showSetGoalSheet()">⚙ 设置总存款目标${state.goal>0?`（¥${fmtMoney(state.goal)}）`:''}</button>
+
     <div class="summary-row">
       <div class="summary-box">
         <div class="summary-box-label">当前总额</div>
@@ -1243,8 +1259,10 @@ function renderStats() {
   `;
 
   // 趋势图 - 合并所有项目按时间
+  const activeProj = state.activeTab === 'all' ? null : state.projects.find(p => p.id === state.activeTab);
+  const trendTitle = activeProj ? `${activeProj.name}存款趋势` : '总存款趋势';
   html += `<div class="chart-card">
-    <div class="chart-title">总存款趋势</div>
+    <div class="chart-title">${trendTitle}</div>
     <div id="trendChart"></div>
   </div>`;
 
