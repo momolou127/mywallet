@@ -1575,14 +1575,10 @@ function showProjectDetail(pid) {
   ).join('');
 
   openSheet(`
-    <div class="sheet-title">项目详情</div>
-    <div class="form-group">
-      <label class="form-label">项目名称</label>
-      <input type="text" class="form-input" id="editProjName" value="${p.name}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">颜色标签</label>
-      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div style="width:18px;height:18px;border-radius:6px;background:${p.color};flex-shrink:0;"></div>
+      <div class="sheet-title" style="margin:0;flex:1;">${p.name}</div>
+      <button class="mini-btn" onclick="showProjectMenu('${pid}')" title="项目操作" style="font-size:18px;color:var(--text-2);">⋯</button>
     </div>
     <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
@@ -1599,10 +1595,47 @@ function showProjectDetail(pid) {
     <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;">
       ${listHtml}
     </div>
-    <button class="btn-primary" onclick="updateProject('${pid}')">保存修改</button>
     <button class="btn-primary" style="background:var(--green)" onclick="showAddRecordSheet('${pid}')">＋ 记一笔</button>
-    <button class="btn-danger" onclick="deleteProject('${pid}')">删除项目</button>
     <button class="btn-secondary" onclick="closeSheet()">关闭</button>
+  `);
+}
+
+// 长按/⋯ 项目操作菜单（编辑名称/颜色、删除项目）
+function showProjectMenu(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  const recCount = state.records.filter(r => r.projectId === pid).length;
+  openSheet(`
+    <div class="sheet-title">项目操作</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0 16px;">
+      <div style="width:16px;height:16px;border-radius:5px;background:${p.color};"></div>
+      <div style="font-size:15px;font-weight:600;">${p.name}</div>
+    </div>
+    <button class="btn-primary" onclick="closeSheet();showEditProjectSheet('${pid}')">✏️ 编辑名称 / 颜色</button>
+    <button class="btn-danger" onclick="closeSheet();setTimeout(()=>deleteProject('${pid}'),100)">🗑 删除项目（含 ${recCount} 条记录）</button>
+    <button class="btn-secondary" onclick="closeSheet()" style="margin-top:8px;">取消</button>
+  `);
+}
+
+// 编辑项目名称/颜色（复用添加项目的UI，传入 pid 则为编辑模式）
+function showEditProjectSheet(pid) {
+  const p = state.projects.find(x => x.id === pid);
+  if (!p) return;
+  let colorHtml = COLORS.map(c =>
+    `<div class="color-option ${c===p.color?'selected':''}" style="background:${c}" onclick="selectColor(this,'${c}')" data-color="${c}"></div>`
+  ).join('');
+  openSheet(`
+    <div class="sheet-title">编辑项目</div>
+    <div class="form-group">
+      <label class="form-label">项目名称</label>
+      <input type="text" class="form-input" id="editProjName" value="${p.name}" maxlength="20">
+    </div>
+    <div class="form-group">
+      <label class="form-label">颜色标签</label>
+      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    </div>
+    <button class="btn-primary" onclick="updateProject('${pid}')">保存</button>
+    <button class="btn-secondary" onclick="closeSheet()" style="margin-top:8px;">取消</button>
   `);
 }
 
@@ -1691,7 +1724,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then((reg) => {
+    // 用 ?v=3 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v3
+    navigator.serviceWorker.register('./sw.js?v=3').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
