@@ -769,9 +769,11 @@ body {
   <div class="header-top">
     <div class="app-title">我的钱包</div>
     <div class="header-actions">
-      <button class="icon-btn" onclick="exportData()" title="导出">↓</button>
+      <button class="icon-btn" onclick="exportData()" title="导出备份">↓</button>
+      <button class="icon-btn" onclick="importData()" title="导入备份">↑</button>
       <button class="icon-btn" onclick="showAddProjectSheet()" title="新增项目">＋</button>
     </div>
+    <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="handleImportFile(this)">
   </div>
   <div class="total-card">
     <div class="total-label">总存款</div>
@@ -1757,8 +1759,13 @@ function exportData() {
   a.click();
   URL.revokeObjectURL(url);
 
-  // 同时导出JSON备份
-  const json = JSON.stringify({ projects: state.projects, records: state.records, exportedAt: new Date().toISOString() }, null, 2);
+  // 同时导出JSON备份（含 goal，便于完整还原）
+  const json = JSON.stringify({
+    projects: state.projects,
+    records: state.records,
+    goal: state.goal || 0,
+    exportedAt: new Date().toISOString()
+  }, null, 2);
   const blob2 = new Blob([json], { type: 'application/json' });
   const url2 = URL.createObjectURL(blob2);
   const a2 = document.createElement('a');
@@ -1768,6 +1775,50 @@ function exportData() {
   URL.revokeObjectURL(url2);
 
   toast('已导出CSV和JSON备份');
+}
+
+// ===== 导入备份 =====
+function importData() {
+  const input = document.getElementById('importFile');
+  if (input) input.click();
+}
+
+function handleImportFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const projects = Array.isArray(data.projects) ? data.projects : [];
+      const records = Array.isArray(data.records) ? data.records : [];
+      if (projects.length === 0 && records.length === 0) {
+        toast('备份文件为空或格式不正确');
+        return;
+      }
+      if (!confirm(`导入将覆盖当前数据（${state.projects.length}个项目 / ${state.records.length}条记录），覆盖后无法恢复。确定导入？`)) {
+        input.value = '';
+        return;
+      }
+      state.projects = projects;
+      state.records = records;
+      if (typeof data.goal === 'number') state.goal = data.goal;
+      if (typeof data.activeTab === 'string') state.activeTab = data.activeTab;
+      saveData();
+      render();
+      toast('备份已导入');
+    } catch (err) {
+      console.error('导入失败', err);
+      toast('导入失败：文件不是有效的JSON备份');
+    } finally {
+      input.value = '';
+    }
+  };
+  reader.onerror = () => {
+    toast('读取文件失败');
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ===== 初始化 =====
