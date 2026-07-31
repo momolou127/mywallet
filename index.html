@@ -1141,22 +1141,26 @@ function renderGoalBanner() {
 function showSetGoalSheet() {
   openSheet(`
     <div class="sheet-title">设置总存款目标</div>
-    <div class="form-group">
-      <label class="form-label">目标金额（元，可填负数）</label>
-      <input type="number" class="form-input amount-input" id="goalInput" value="${state.goal || ''}" step="0.01" placeholder="如：500000">
-    </div>
-    <div class="form-group">
-      <label class="form-label">快捷设置</label>
-      <div class="quick-amounts">
-        <span class="quick-amount" onclick="document.getElementById('goalInput').value=100000">10万</span>
-        <span class="quick-amount" onclick="document.getElementById('goalInput').value=200000">20万</span>
-        <span class="quick-amount" onclick="document.getElementById('goalInput').value=500000">50万</span>
-        <span class="quick-amount" onclick="document.getElementById('goalInput').value=1000000">100万</span>
-        <span class="quick-amount" onclick="document.getElementById('goalInput').value=0">清除</span>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">目标金额（元，可填负数）</label>
+        <input type="number" class="form-input amount-input" id="goalInput" value="${state.goal || ''}" step="0.01" placeholder="如：500000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">快捷设置</label>
+        <div class="quick-amounts">
+          <span class="quick-amount" onclick="document.getElementById('goalInput').value=100000">10万</span>
+          <span class="quick-amount" onclick="document.getElementById('goalInput').value=200000">20万</span>
+          <span class="quick-amount" onclick="document.getElementById('goalInput').value=500000">50万</span>
+          <span class="quick-amount" onclick="document.getElementById('goalInput').value=1000000">100万</span>
+          <span class="quick-amount" onclick="document.getElementById('goalInput').value=0">清除</span>
+        </div>
       </div>
     </div>
-    <button class="btn-primary" onclick="saveGoal()">保存</button>
-    <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveGoal()">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
   `);
 }
 
@@ -1545,21 +1549,25 @@ function deleteRecord(rid) {
 
 // ===== 项目管理 =====
 function showAddProjectSheet() {
-  let colorHtml = COLORS.map((c,i) => 
+  let colorHtml = COLORS.map((c,i) =>
     `<div class="color-option ${i===0?'selected':''}" style="background:${c}" onclick="selectColor(this,'${c}')" data-color="${c}"></div>`
   ).join('');
   openSheet(`
     <div class="sheet-title">新建项目</div>
-    <div class="form-group">
-      <label class="form-label">项目名称</label>
-      <input type="text" class="form-input" id="projName" placeholder="如：工资卡、理财、现金...">
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">项目名称</label>
+        <input type="text" class="form-input" id="projName" placeholder="如：工资卡、理财、现金...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">颜色标签</label>
+        <div class="color-picker" id="colorPicker">${colorHtml}</div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">颜色标签</label>
-      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveProject()">创建</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
     </div>
-    <button class="btn-primary" onclick="saveProject()">创建</button>
-    <button class="btn-secondary" onclick="closeSheet()">取消</button>
   `);
 }
 
@@ -1667,13 +1675,17 @@ function showProjectMenu(pid) {
   const recCount = state.records.filter(r => r.projectId === pid).length;
   openSheet(`
     <div class="sheet-title">项目操作</div>
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 0 16px;">
-      <div style="width:16px;height:16px;border-radius:5px;background:${p.color};"></div>
-      <div style="font-size:15px;font-weight:600;">${p.name}</div>
+    <div class="sheet-body">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0 16px;">
+        <div style="width:16px;height:16px;border-radius:5px;background:${p.color};"></div>
+        <div style="font-size:15px;font-weight:600;">${p.name}</div>
+      </div>
     </div>
-    <button class="btn-primary" onclick="closeSheet();showEditProjectSheet('${pid}')">✏️ 编辑名称 / 颜色</button>
-    <button class="btn-danger" onclick="closeSheet();setTimeout(()=>deleteProject('${pid}'),100)">🗑 删除项目（含 ${recCount} 条记录）</button>
-    <button class="btn-secondary" onclick="closeSheet()" style="margin-top:8px;">取消</button>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="closeSheet();showEditProjectSheet('${pid}')">✏️ 编辑名称/颜色</button>
+      <button class="btn-danger" onclick="closeSheet();setTimeout(()=>deleteProject('${pid}'),100)">🗑 删除（含${recCount}条记录）</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
   `);
 }
 
@@ -1686,16 +1698,20 @@ function showEditProjectSheet(pid) {
   ).join('');
   openSheet(`
     <div class="sheet-title">编辑项目</div>
-    <div class="form-group">
-      <label class="form-label">项目名称</label>
-      <input type="text" class="form-input" id="editProjName" value="${p.name}" maxlength="20">
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">项目名称</label>
+        <input type="text" class="form-input" id="editProjName" value="${p.name}" maxlength="20">
+      </div>
+      <div class="form-group">
+        <label class="form-label">颜色标签</label>
+        <div class="color-picker" id="colorPicker">${colorHtml}</div>
+      </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">颜色标签</label>
-      <div class="color-picker" id="colorPicker">${colorHtml}</div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="updateProject('${pid}')">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
     </div>
-    <button class="btn-primary" onclick="updateProject('${pid}')">保存</button>
-    <button class="btn-secondary" onclick="closeSheet()" style="margin-top:8px;">取消</button>
   `);
 }
 
@@ -1833,8 +1849,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=3 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v3
-    navigator.serviceWorker.register('./sw.js?v=3').then((reg) => {
+    // 用 ?v=4 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v4
+    navigator.serviceWorker.register('./sw.js?v=4').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
