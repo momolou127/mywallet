@@ -761,6 +761,11 @@ body {
 }
 .snapshot-summary .sa .currency { font-size: 16px; font-weight: 600; margin-right: 4px; opacity: 0.9; }
 .snapshot-summary .sd { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+
+/* 股权激励页 */
+.page-head { padding: 16px 16px 4px; }
+.page-title { font-size: 20px; font-weight: 700; color: #1d1d1f; }
+.page-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -771,7 +776,7 @@ body {
     <div class="header-actions">
       <button class="icon-btn" onclick="exportData()" title="导出备份">↓</button>
       <button class="icon-btn" onclick="importData()" title="导入备份">↑</button>
-      <button class="icon-btn" onclick="showAddProjectSheet()" title="新增项目">＋</button>
+      <button class="icon-btn" onclick="onHeaderAddClick()" title="新增">＋</button>
     </div>
     <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="handleImportFile(this)">
   </div>
@@ -790,7 +795,7 @@ body {
 
 <div class="content" id="content"></div>
 
-<button class="fab" onclick="showAddRecordSheet()">＋</button>
+<button class="fab" onclick="onFabClick()">＋</button>
 
 <nav class="bottom-nav">
   <button class="nav-item active" data-page="home" onclick="switchPage('home')">
@@ -801,6 +806,9 @@ body {
   </button>
   <button class="nav-item" data-page="stats" onclick="switchPage('stats')">
     <span class="nav-icon">◔</span><span>统计</span>
+  </button>
+  <button class="nav-item" data-page="equity" onclick="switchPage('equity')">
+    <span class="nav-icon">📈</span><span>股权激励</span>
   </button>
 </nav>
 
@@ -822,7 +830,8 @@ let state = {
   records: [],
   goal: 0,
   activeTab: 'all',
-  snapshotDate: null
+  snapshotDate: null,
+  equity: []   // 股权激励：[{id,name,color,totalAmount,grantPrice,totalShares,createdAt,vests:[{id,date,amount,shares,note}]}]
 };
 let currentPage = 'home';
 
@@ -834,6 +843,7 @@ function loadData() {
       state.projects = data.projects || [];
       state.records = data.records || [];
       state.goal = data.goal || 0;
+      state.equity = Array.isArray(data.equity) ? data.equity : [];
     } catch(e) { seedDemo(); }
   } else {
     seedDemo();
@@ -844,7 +854,8 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     projects: state.projects,
     records: state.records,
-    goal: state.goal || 0
+    goal: state.goal || 0,
+    equity: state.equity
   }));
 }
 
@@ -873,6 +884,10 @@ function seedDemo() {
     { id: 'r9', projectId: 'p3', amount: 8000, date: d(40), note: '' },
     { id: 'r10', projectId: 'p3', amount: 12000, date: d(20), note: '' },
     { id: 'r11', projectId: 'p3', amount: 10000, date: d(5), note: '开销' }
+  ];
+  state.equity = [
+    { id: 'e1', name: '2024年限制性股票', color: '#af52de', totalAmount: 500000, grantPrice: 10, totalShares: 50000, createdAt: d(100),
+      vests: [ { id: 'v1', date: d(20), amount: 100000, shares: 10000, note: '首批解禁' } ] }
   ];
   saveData();
 }
@@ -964,11 +979,14 @@ function renderPage() {
   const isHome = currentPage === 'home';
   const tc = document.querySelector('.total-card');
   const gb = document.getElementById('goalBanner');
+  const tabsEl = document.getElementById('tabs');
   if (tc) tc.style.display = isHome ? '' : 'none';
   if (gb) gb.style.display = isHome ? '' : 'none';
+  if (tabsEl) tabsEl.style.display = currentPage === 'equity' ? 'none' : '';
   if (currentPage === 'home') renderHome();
   else if (currentPage === 'snapshot') renderSnapshot();
   else if (currentPage === 'stats') renderStats();
+  else if (currentPage === 'equity') renderEquity();
   renderTotal();
   renderGoalBanner();
 }
@@ -1773,7 +1791,7 @@ function deleteProject(pid) {
 
 // ===== 导出 =====
 function exportData() {
-  if (state.records.length === 0 && state.projects.length === 0) {
+  if (state.records.length === 0 && state.projects.length === 0 && (state.equity||[]).length === 0) {
     toast('暂无数据可导出');
     return;
   }
@@ -1798,6 +1816,7 @@ function exportData() {
     projects: state.projects,
     records: state.records,
     goal: state.goal || 0,
+    equity: state.equity || [],
     exportedAt: new Date().toISOString()
   }, null, 2);
   const blob2 = new Blob([json], { type: 'application/json' });
@@ -1826,16 +1845,18 @@ function handleImportFile(input) {
       const data = JSON.parse(e.target.result);
       const projects = Array.isArray(data.projects) ? data.projects : [];
       const records = Array.isArray(data.records) ? data.records : [];
-      if (projects.length === 0 && records.length === 0) {
+      const equity = Array.isArray(data.equity) ? data.equity : [];
+      if (projects.length === 0 && records.length === 0 && equity.length === 0) {
         toast('备份文件为空或格式不正确');
         return;
       }
-      if (!confirm(`导入将覆盖当前数据（${state.projects.length}个项目 / ${state.records.length}条记录），覆盖后无法恢复。确定导入？`)) {
+      if (!confirm(`导入将覆盖当前数据（${state.projects.length}个项目 / ${state.records.length}条记录 / ${(state.equity||[]).length}笔股权激励），覆盖后无法恢复。确定导入？`)) {
         input.value = '';
         return;
       }
       state.projects = projects;
       state.records = records;
+      state.equity = equity;
       if (typeof data.goal === 'number') state.goal = data.goal;
       if (typeof data.activeTab === 'string') state.activeTab = data.activeTab;
       saveData();
@@ -1853,6 +1874,378 @@ function handleImportFile(input) {
     input.value = '';
   };
   reader.readAsText(file);
+}
+
+// ===== 股权激励 =====
+function getEquityVested(g) {
+  const vests = g.vests || [];
+  const shares = vests.reduce((s, v) => s + (Number(v.shares) || 0), 0);
+  const amount = vests.reduce((s, v) => s + (Number(v.amount) || 0), 0);
+  return { shares, amount };
+}
+function getEquityRemaining(g) {
+  const v = getEquityVested(g);
+  return {
+    shares: (Number(g.totalShares) || 0) - v.shares,
+    amount: (Number(g.totalAmount) || 0) - v.amount
+  };
+}
+
+function onFabClick() {
+  if (currentPage === 'equity') showAddEquitySheet();
+  else showAddRecordSheet();
+}
+function onHeaderAddClick() {
+  if (currentPage === 'equity') showAddEquitySheet();
+  else showAddProjectSheet();
+}
+
+function renderEquity() {
+  const content = document.getElementById('content');
+  const list = state.equity || [];
+  let html = `<div class="page-head">
+    <div class="page-title">股权激励</div>
+    <div class="page-sub">记录授予与解禁，自动计算剩余股数</div>
+  </div>`;
+  if (list.length === 0) {
+    html += `<div class="empty-state">
+      <div class="icon">📈</div>
+      <div class="title">还没有股权激励</div>
+      <div class="desc">点击右下角"＋"新增一笔股权激励</div>
+    </div>`;
+    content.innerHTML = html;
+    return;
+  }
+  list.forEach(g => {
+    const vest = getEquityVested(g);
+    const remain = getEquityRemaining(g);
+    const total = Number(g.totalShares) || 0;
+    const pct = total > 0 ? Math.min(100, vest.shares / total * 100) : 0;
+    const remainVal = (Number(g.grantPrice) || 0) * remain.shares;
+    const neg = remain.shares < 0;
+    html += `<div class="project-card" onclick="showEquityDetail('${g.id}')">
+      <div class="project-header">
+        <div class="project-info">
+          <div class="project-name"><span class="project-color" style="background:${g.color}"></span>${g.name}</div>
+          <div class="project-latest">剩余 ${fmtMoney(Math.round(remain.shares))} 股</div>
+          <div class="project-change ${neg ? 'down' : 'flat'}">${neg ? '⚠ 解禁已超过授予股数' : (remainVal > 0 ? '按授予价估算 ¥' + fmtMoney(Math.round(remainVal)) : '')}</div>
+        </div>
+        <div class="project-actions" onclick="event.stopPropagation()">
+          <button class="mini-btn" onclick="showVestSheet('${g.id}')" title="记解禁">＋</button>
+          <button class="mini-btn" onclick="showEquityDetail('${g.id}')" title="详情">›</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin:8px 2px 4px;">
+        <span>授予 ${fmtMoney(Math.round(total))} 股 · 价 ¥${fmtMoney(g.grantPrice)}</span>
+        <span>已解禁 ${fmtMoney(Math.round(vest.shares))} 股</span>
+      </div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  });
+  content.innerHTML = html;
+}
+
+function showAddEquitySheet() {
+  openSheet(`
+    <div class="sheet-title">新增股权激励</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">名称（选填）</label>
+        <input type="text" class="form-input" id="eqName" placeholder="如：2024年限制性股票、期权池...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股权激励金额（元）</label>
+        <input type="number" class="form-input amount-input" id="eqAmount" placeholder="授予总价值" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股票授予价格（元/股）</label>
+        <input type="number" class="form-input amount-input" id="eqPrice" placeholder="如：10" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股数（授予总股数）</label>
+        <input type="number" class="form-input amount-input" id="eqShares" placeholder="如：50000" step="1">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveEquity()">创建</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+
+function saveEquity() {
+  const name = document.getElementById('eqName').value.trim();
+  const totalAmount = parseFloat(document.getElementById('eqAmount').value);
+  const grantPrice = parseFloat(document.getElementById('eqPrice').value);
+  const totalShares = parseFloat(document.getElementById('eqShares').value);
+  if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
+  state.equity.push({
+    id: uid(),
+    name: name || '股权激励',
+    color: COLORS[state.equity.length % COLORS.length],
+    totalAmount: isNaN(totalAmount) ? 0 : totalAmount,
+    grantPrice: isNaN(grantPrice) ? 0 : grantPrice,
+    totalShares: totalShares,
+    createdAt: new Date().toISOString(),
+    vests: []
+  });
+  saveData();
+  closeSheet();
+  render();
+  toast('已新增股权激励');
+}
+
+function showEquityDetail(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const vest = getEquityVested(g);
+  const remain = getEquityRemaining(g);
+  const total = Number(g.totalShares) || 0;
+  const pct = total > 0 ? Math.min(100, vest.shares / total * 100) : 0;
+  const remainVal = (Number(g.grantPrice) || 0) * remain.shares;
+
+  const sorted = [...(g.vests || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
+  let listHtml = '';
+  if (sorted.length === 0) {
+    listHtml = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:20px 0;">暂无解禁记录，点下方"记一笔解禁"添加</div>`;
+  } else {
+    sorted.forEach(v => {
+      listHtml += `<div onclick="editVest('${eqId}','${v.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:0.5px solid var(--border);">
+        <div style="flex:1;padding-right:10px;">
+          <div style="font-size:12px;color:var(--text-3);">${fmtDateFull(v.date)}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;">解禁 ${fmtMoney(Math.round(v.shares))} 股 · ¥${fmtMoney(v.amount)}</div>
+          ${v.note ? `<div style="font-size:12px;color:var(--text-3);margin-top:2px;">备注：${v.note}</div>` : ''}
+        </div>
+        <button class="mini-btn" onclick="event.stopPropagation();deleteVest('${eqId}','${v.id}')" title="删除" style="color:var(--red);font-size:15px;">🗑</button>
+      </div>`;
+    });
+  }
+
+  openSheet(`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div style="width:18px;height:18px;border-radius:6px;background:${g.color};flex-shrink:0;"></div>
+      <div class="sheet-title" style="margin:0;flex:1;">${g.name}</div>
+    </div>
+    <div class="sheet-body">
+      <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>授予总额</span><span>¥${fmtMoney(g.totalAmount)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>授予价</span><span>¥${fmtMoney(g.grantPrice)}/股</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>授予总股数</span><span>${fmtMoney(Math.round(total))} 股</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+          <span>已解禁</span><span>${fmtMoney(Math.round(vest.shares))} 股 · ¥${fmtMoney(vest.amount)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary);margin-top:8px;">
+          <span>剩余股数</span><span>${fmtMoney(Math.round(remain.shares))} 股</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:2px;">
+          <span></span><span>按授予价估算 ¥${fmtMoney(Math.round(remainVal))}</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
+        <span>解禁进度</span><span>${pct.toFixed(1)}%</span>
+      </div>
+      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      <div class="section-title" style="margin:18px 0 8px;padding-left:4px;">解禁记录（${sorted.length}）</div>
+      <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">
+        ${listHtml}
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="showVestSheet('${eqId}')">＋记一笔解禁</button>
+      <button class="btn-primary" style="background:var(--green)" onclick="showEditEquitySheet('${eqId}')">编辑</button>
+      <button class="btn-danger" onclick="deleteEquity('${eqId}')">删除</button>
+      <button class="btn-secondary" onclick="closeSheet()">关闭</button>
+    </div>
+  `);
+}
+
+function showVestSheet(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const now = new Date();
+  const localNow = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const remain = getEquityRemaining(g);
+  openSheet(`
+    <div class="sheet-title">记一笔解禁</div>
+    <div class="sheet-body">
+      <div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-2);margin-bottom:12px;">
+        当前剩余 <b style="color:var(--primary)">${fmtMoney(Math.round(remain.shares))}</b> 股（授予 ${fmtMoney(Math.round(g.totalShares))} 股）
+      </div>
+      <div class="form-group">
+        <label class="form-label">解禁日期</label>
+        <input type="datetime-local" class="form-input" id="vestDate" value="${localNow}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">解禁股数（股）</label>
+        <input type="number" class="form-input amount-input" id="vestShares" placeholder="本次解禁股数" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">解禁金额（元）</label>
+        <input type="number" class="form-input amount-input" id="vestAmount" placeholder="本次解禁对应金额" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注（选填）</label>
+        <input type="text" class="form-input" id="vestNote" placeholder="如：首批解禁、离职解锁...">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveVest('${eqId}')">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+
+function saveVest(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const date = document.getElementById('vestDate').value;
+  const shares = parseFloat(document.getElementById('vestShares').value);
+  const amount = parseFloat(document.getElementById('vestAmount').value);
+  const note = document.getElementById('vestNote').value.trim();
+  if (!date) { toast('请选择解禁日期'); return; }
+  if (isNaN(shares) || shares <= 0) { toast('请输入有效解禁股数'); return; }
+  g.vests = g.vests || [];
+  g.vests.push({
+    id: uid(),
+    date: new Date(date).toISOString(),
+    shares: shares,
+    amount: isNaN(amount) ? 0 : amount,
+    note: note
+  });
+  saveData();
+  closeSheet();
+  render();
+  toast('已记录解禁');
+}
+
+function editVest(eqId, vid) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const v = (g.vests || []).find(x => x.id === vid);
+  if (!v) return;
+  const d = new Date(v.date);
+  const localDate = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  openSheet(`
+    <div class="sheet-title">编辑解禁记录</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">解禁日期</label>
+        <input type="datetime-local" class="form-input" id="vestDate" value="${localDate}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">解禁股数（股）</label>
+        <input type="number" class="form-input amount-input" id="vestShares" value="${v.shares}" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">解禁金额（元）</label>
+        <input type="number" class="form-input amount-input" id="vestAmount" value="${v.amount}" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">备注</label>
+        <input type="text" class="form-input" id="vestNote" value="${v.note||''}">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="updateVest('${eqId}','${vid}')">更新</button>
+      <button class="btn-danger" onclick="deleteVest('${eqId}','${vid}')">删除</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+
+function updateVest(eqId, vid) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const v = (g.vests || []).find(x => x.id === vid);
+  if (!v) return;
+  const date = document.getElementById('vestDate').value;
+  const shares = parseFloat(document.getElementById('vestShares').value);
+  const amount = parseFloat(document.getElementById('vestAmount').value);
+  const note = document.getElementById('vestNote').value.trim();
+  if (!date) { toast('请选择解禁日期'); return; }
+  if (isNaN(shares) || shares <= 0) { toast('请输入有效解禁股数'); return; }
+  v.date = new Date(date).toISOString();
+  v.shares = shares;
+  v.amount = isNaN(amount) ? 0 : amount;
+  v.note = note;
+  saveData();
+  closeSheet();
+  render();
+  toast('已更新');
+}
+
+function deleteVest(eqId, vid) {
+  if (!confirm('确定删除这条解禁记录吗？删除后不可恢复。')) return;
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  g.vests = (g.vests || []).filter(x => x.id !== vid);
+  saveData();
+  render();
+  showEquityDetail(eqId);
+  toast('解禁记录已删除');
+}
+
+function showEditEquitySheet(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  openSheet(`
+    <div class="sheet-title">编辑股权激励</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">名称</label>
+        <input type="text" class="form-input" id="editEqName" value="${g.name}" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股权激励金额（元）</label>
+        <input type="number" class="form-input amount-input" id="editEqAmount" value="${g.totalAmount}" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股票授予价格（元/股）</label>
+        <input type="number" class="form-input amount-input" id="editEqPrice" value="${g.grantPrice}" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">股数（授予总股数）</label>
+        <input type="number" class="form-input amount-input" id="editEqShares" value="${g.totalShares}" step="1">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="updateEquity('${eqId}')">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+
+function updateEquity(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const name = document.getElementById('editEqName').value.trim();
+  const totalAmount = parseFloat(document.getElementById('editEqAmount').value);
+  const grantPrice = parseFloat(document.getElementById('editEqPrice').value);
+  const totalShares = parseFloat(document.getElementById('editEqShares').value);
+  if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
+  g.name = name || '股权激励';
+  g.totalAmount = isNaN(totalAmount) ? 0 : totalAmount;
+  g.grantPrice = isNaN(grantPrice) ? 0 : grantPrice;
+  g.totalShares = totalShares;
+  saveData();
+  closeSheet();
+  render();
+  toast('已更新');
+}
+
+function deleteEquity(eqId) {
+  if (!confirm('确定删除这笔股权激励吗？含全部解禁记录，删除后不可恢复。')) return;
+  state.equity = state.equity.filter(x => x.id !== eqId);
+  saveData();
+  closeSheet();
+  render();
+  toast('已删除');
 }
 
 // ===== 初始化 =====
