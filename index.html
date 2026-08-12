@@ -895,7 +895,10 @@ function seedDemo() {
   ];
   state.equity = [
     { id: 'e1', name: '2024年限制性股票', color: '#af52de', totalAmount: 500000, grantPrice: 10, totalShares: 50000,
-      grantDate: d(100).slice(0,10), vestYears: 5, vestBatches: 5, vestStartYear: 1, createdAt: d(100),
+      grantDate: d(100).slice(0,10), vestBatches: 5,
+      vestStartYear: 1, vestFirstMonth: 9,
+      vestRestStartYear: 3, vestRestMonth: 2, vestRestInterval: 1,
+      createdAt: d(100),
       vests: [ { id: 'v1', date: d(20), amount: 100000, shares: 10000, note: '首批解禁' } ] }
   ];
   saveData();
@@ -1901,24 +1904,38 @@ function getEquityRemaining(g) {
 }
 
 // 根据授予规则自动生成解禁计划（预计）：每批日期/股数/预计金额
+// 支持不规则规则：如首批9月、后续全2月
 function computeVestPlan(g) {
   const batches = parseInt(g.vestBatches);
   if (!batches || batches < 1) return [];
   const total = Number(g.totalShares) || 0;
-  const years = Number(g.vestYears) || batches;
-  const startYear = Number(g.vestStartYear) || 0;
+  const price = Number(g.grantPrice) || 0;
   const base = g.grantDate ? new Date(g.grantDate) : new Date();
-  const step = years / batches; // 每批间隔（年，可为小数）
+  // 首批参数
+  const firstStartYear = Number(g.vestStartYear) || 1;   // 首批在第几年
+  const firstMonth = Number(g.vestFirstMonth) || 9;      // 首批在几月(1-12)
+  // 后续批次参数
+  const restStartYear = Number(g.vestRestStartYear) || 3; // 后续从第几年起
+  const restMonth = Number(g.vestRestMonth) || 2;        // 后续在几月(1-12)
+  const restInterval = Number(g.vestRestInterval) || 1;   // 后续每隔几年一批
+  const perBatchShares = total / batches;
   const plan = [];
   for (let i = 1; i <= batches; i++) {
-    const offsetYears = startYear + (i - 1) * step;
-    const d = new Date(base.getTime());
-    const fullYears = Math.floor(offsetYears);
-    const remMonths = Math.round((offsetYears - fullYears) * 12);
-    d.setFullYear(d.getFullYear() + fullYears);
-    d.setMonth(d.getMonth() + remMonths);
-    const shares = total / batches;
-    const amount = shares * (Number(g.grantPrice) || 0);
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate());
+    if (i === 1) {
+      // 第1批：授予后第 firstStartYear 年 + firstMonth 月
+      d.setFullYear(d.getFullYear() + firstStartYear);
+      d.setMonth(firstMonth - 1); // JS month is 0-based
+      d.setDate(1);
+    } else {
+      // 第2批起：从 restStartYear 开始，每隔 restInterval 年一批，固定 restMonth 月
+      const yearOffset = restStartYear + (i - 2) * restInterval;
+      d.setFullYear(d.getFullYear() + yearOffset);
+      d.setMonth(restMonth - 1);
+      d.setDate(1);
+    }
+    const shares = perBatchShares;
+    const amount = shares * price;
     plan.push({ batch: i, date: d.toISOString(), shares: shares, amount: amount });
   }
   return plan;
@@ -2063,19 +2080,39 @@ function showAddEquitySheet() {
       </div>
       <div style="background:var(--bg);border-radius:10px;padding:12px;margin:4px 0 4px;">
         <div style="font-size:13px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:10px;">解禁计划（自动生成每批时间/股数/预计金额）</div>
-        <div class="form-group" style="margin-bottom:10px;">
-          <label class="form-label">解禁年限（年）</label>
-          <input type="number" class="form-input amount-input" id="eqVestYears" value="5" step="1" min="1">
-        </div>
-        <div class="form-group" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:8px;">
           <label class="form-label">解禁批次（次）</label>
           <input type="number" class="form-input amount-input" id="eqVestBatches" value="5" step="1" min="1">
         </div>
-        <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">首批解禁（授予后第几年）</label>
-          <input type="number" class="form-input amount-input" id="eqVestStart" value="1" step="1" min="0">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">首批：第几年</label>
+            <input type="number" class="form-input amount-input" id="eqVestStart" value="1" step="1" min="0">
+          </div>
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">几月解禁</label>
+            <select class="form-select" id="eqFirstMonth">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}"${m===9?' selected':''}>${m}月</option>`).join('')}
+            </select>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--text-3);margin-top:8px;">例：5年/5批/首批第1年 → 每年解禁1/5股数</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">后续从第几年起</label>
+            <input type="number" class="form-input amount-input" id="eqRestStart" value="3" step="1" min="2">
+          </div>
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">后续几月解禁</label>
+            <select class="form-select" id="eqRestMonth">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}"${m===2?' selected':''}>${m}月</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">后续每隔几年一批</label>
+          <input type="number" class="form-input amount-input" id="eqRestInterval" value="1" step="1" min="1">
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:6px;">例：5批 / 首批第1年9月 / 后续从第3年起每年2月 → 第1批2026年9月，第2~5批2028~2031年2月</div>
       </div>
     </div>
     <div class="sheet-actions">
@@ -2092,9 +2129,12 @@ function saveEquity() {
   const totalShares = parseFloat(document.getElementById('eqShares').value);
   if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
   const gd = document.getElementById('eqGrantDate').value;
-  const vestYears = parseInt(document.getElementById('eqVestYears').value) || 0;
   const vestBatches = parseInt(document.getElementById('eqVestBatches').value) || 0;
-  const vestStartYear = parseInt(document.getElementById('eqVestStart').value) || 0;
+  const vestStartYear = parseInt(document.getElementById('eqVestStart').value) || 1;
+  const firstMonth = parseInt(document.getElementById('eqFirstMonth').value) || 9;
+  const restStartYear = parseInt(document.getElementById('eqRestStart').value) || 3;
+  const restMonth = parseInt(document.getElementById('eqRestMonth').value) || 2;
+  const restInterval = parseInt(document.getElementById('eqRestInterval').value) || 1;
   state.equity.push({
     id: uid(),
     name: name || '股权激励',
@@ -2103,9 +2143,12 @@ function saveEquity() {
     grantPrice: isNaN(grantPrice) ? 0 : grantPrice,
     totalShares: totalShares,
     grantDate: gd ? new Date(gd + 'T00:00:00').toISOString() : new Date().toISOString(),
-    vestYears: vestYears,
     vestBatches: vestBatches,
     vestStartYear: vestStartYear,
+    vestFirstMonth: firstMonth,
+    vestRestStartYear: restStartYear,
+    vestRestMonth: restMonth,
+    vestRestInterval: restInterval,
     createdAt: new Date().toISOString(),
     vests: []
   });
@@ -2359,17 +2402,37 @@ function showEditEquitySheet(eqId) {
       </div>
       <div style="background:var(--bg);border-radius:10px;padding:12px;margin:4px 0 4px;">
         <div style="font-size:13px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:10px;">解禁计划</div>
-        <div class="form-group" style="margin-bottom:10px;">
-          <label class="form-label">解禁年限（年）</label>
-          <input type="number" class="form-input amount-input" id="editEqVestYears" value="${g.vestYears||''}" step="1" min="1">
-        </div>
-        <div class="form-group" style="margin-bottom:10px;">
+        <div class="form-group" style="margin-bottom:8px;">
           <label class="form-label">解禁批次（次）</label>
           <input type="number" class="form-input amount-input" id="editEqVestBatches" value="${g.vestBatches||''}" step="1" min="1">
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">首批：第几年</label>
+            <input type="number" class="form-input amount-input" id="editEqVestStart" value="${g.vestStartYear||1}" step="1" min="0">
+          </div>
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">几月解禁</label>
+            <select class="form-select" id="editEqFirstMonth">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}"${m===(g.vestFirstMonth||9)?' selected':''}>${m}月</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">后续从第几年起</label>
+            <input type="number" class="form-input amount-input" id="editEqRestStart" value="${g.vestRestStartYear||3}" step="1" min="2">
+          </div>
+          <div class="form-group" style="flex:1;margin-bottom:0;">
+            <label class="form-label">后续几月解禁</label>
+            <select class="form-select" id="editEqRestMonth">
+              ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<option value="${m}"${m===(g.vestRestMonth||2)?' selected':''}>${m}月</option>`).join('')}
+            </select>
+          </div>
+        </div>
         <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">首批解禁（授予后第几年）</label>
-          <input type="number" class="form-input amount-input" id="editEqVestStart" value="${g.vestStartYear||0}" step="1" min="0">
+          <label class="form-label">后续每隔几年一批</label>
+          <input type="number" class="form-input amount-input" id="editEqRestInterval" value="${g.vestRestInterval||1}" step="1" min="1">
         </div>
       </div>
     </div>
@@ -2389,17 +2452,23 @@ function updateEquity(eqId) {
   const totalShares = parseFloat(document.getElementById('editEqShares').value);
   if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
   const gd = document.getElementById('editEqGrantDate').value;
-  const vestYears = parseInt(document.getElementById('editEqVestYears').value) || 0;
   const vestBatches = parseInt(document.getElementById('editEqVestBatches').value) || 0;
-  const vestStartYear = parseInt(document.getElementById('editEqVestStart').value) || 0;
+  const vestStartYear = parseInt(document.getElementById('editEqVestStart').value) || 1;
+  const firstMonth = parseInt(document.getElementById('editEqFirstMonth').value) || 9;
+  const restStartYear = parseInt(document.getElementById('editEqRestStart').value) || 3;
+  const restMonth = parseInt(document.getElementById('editEqRestMonth').value) || 2;
+  const restInterval = parseInt(document.getElementById('editEqRestInterval').value) || 1;
   g.name = name || '股权激励';
   g.totalAmount = isNaN(totalAmount) ? 0 : totalAmount;
   g.grantPrice = isNaN(grantPrice) ? 0 : grantPrice;
   g.totalShares = totalShares;
   g.grantDate = gd ? new Date(gd + 'T00:00:00').toISOString() : new Date().toISOString();
-  g.vestYears = vestYears;
   g.vestBatches = vestBatches;
   g.vestStartYear = vestStartYear;
+  g.vestFirstMonth = firstMonth;
+  g.vestRestStartYear = restStartYear;
+  g.vestRestMonth = restMonth;
+  g.vestRestInterval = restInterval;
   saveData();
   closeSheet();
   render();
