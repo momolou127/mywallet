@@ -766,6 +766,9 @@ body {
 .page-head { padding: 16px 16px 4px; }
 .page-title { font-size: 20px; font-weight: 700; color: #1d1d1f; }
 .page-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.sub-tabs { display: flex; gap: 8px; padding: 10px 16px 4px; }
+.sub-tab { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: var(--text-2); background: var(--bg); border-radius: 10px; cursor: pointer; }
+.sub-tab.active { color: #fff; background: var(--primary); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -831,7 +834,8 @@ let state = {
   goal: 0,
   activeTab: 'all',
   snapshotDate: null,
-  equity: []   // 股权激励：[{id,name,color,totalAmount,grantPrice,totalShares,createdAt,vests:[{id,date,amount,shares,note}]}]
+  equity: [],   // 股权激励：[{id,name,color,totalAmount,grantPrice,totalShares,grantDate,vestYears,vestBatches,vestStartYear,createdAt,vests:[{id,date,amount,shares,note}]}]
+  equityView: 'project'   // 'project' 按项目查看 / 'time' 按解禁时间查看
 };
 let currentPage = 'home';
 
@@ -890,7 +894,8 @@ function seedDemo() {
     { id: 'r11', projectId: 'p3', amount: 10000, date: d(5), note: '开销' }
   ];
   state.equity = [
-    { id: 'e1', name: '2024年限制性股票', color: '#af52de', totalAmount: 500000, grantPrice: 10, totalShares: 50000, createdAt: d(100),
+    { id: 'e1', name: '2024年限制性股票', color: '#af52de', totalAmount: 500000, grantPrice: 10, totalShares: 50000,
+      grantDate: d(100).slice(0,10), vestYears: 5, vestBatches: 5, vestStartYear: 1, createdAt: d(100),
       vests: [ { id: 'v1', date: d(20), amount: 100000, shares: 10000, note: '首批解禁' } ] }
   ];
   saveData();
@@ -1895,6 +1900,35 @@ function getEquityRemaining(g) {
   };
 }
 
+// 根据授予规则自动生成解禁计划（预计）：每批日期/股数/预计金额
+function computeVestPlan(g) {
+  const batches = parseInt(g.vestBatches);
+  if (!batches || batches < 1) return [];
+  const total = Number(g.totalShares) || 0;
+  const years = Number(g.vestYears) || batches;
+  const startYear = Number(g.vestStartYear) || 0;
+  const base = g.grantDate ? new Date(g.grantDate) : new Date();
+  const step = years / batches; // 每批间隔（年，可为小数）
+  const plan = [];
+  for (let i = 1; i <= batches; i++) {
+    const offsetYears = startYear + (i - 1) * step;
+    const d = new Date(base.getTime());
+    const fullYears = Math.floor(offsetYears);
+    const remMonths = Math.round((offsetYears - fullYears) * 12);
+    d.setFullYear(d.getFullYear() + fullYears);
+    d.setMonth(d.getMonth() + remMonths);
+    const shares = total / batches;
+    const amount = shares * (Number(g.grantPrice) || 0);
+    plan.push({ batch: i, date: d.toISOString(), shares: shares, amount: amount });
+  }
+  return plan;
+}
+
+function setEquityView(v) {
+  state.equityView = v;
+  renderEquity();
+}
+
 function onFabClick() {
   if (currentPage === 'equity') showAddEquitySheet();
   else showAddRecordSheet();
@@ -1911,12 +1945,22 @@ function renderEquity() {
     <div class="page-title">股权激励</div>
     <div class="page-sub">记录授予与解禁，自动计算剩余股数</div>
   </div>`;
+  // 子视图切换：按项目 / 按解禁时间
+  html += `<div class="sub-tabs">
+    <div class="sub-tab ${state.equityView !== 'time' ? 'active' : ''}" onclick="setEquityView('project')">按项目</div>
+    <div class="sub-tab ${state.equityView === 'time' ? 'active' : ''}" onclick="setEquityView('time')">按解禁时间</div>
+  </div>`;
   if (list.length === 0) {
     html += `<div class="empty-state">
       <div class="icon">📈</div>
       <div class="title">还没有股权激励</div>
       <div class="desc">点击右下角"＋"新增一笔股权激励</div>
     </div>`;
+    content.innerHTML = html;
+    return;
+  }
+  if (state.equityView === 'time') {
+    html += renderEquityTimeView();
     content.innerHTML = html;
     return;
   }
@@ -1949,7 +1993,51 @@ function renderEquity() {
   content.innerHTML = html;
 }
 
+// 按解禁时间视图：汇总所有授予的解禁计划，按年分组
+function renderEquityTimeView() {
+  const list = state.equity || [];
+  const all = [];
+  list.forEach(g => {
+    computeVestPlan(g).forEach(p => all.push({ grant: g, ...p }));
+  });
+  all.sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (all.length === 0) {
+    return `<div class="empty-state">
+      <div class="icon">📅</div>
+      <div class="title">暂无解禁计划</div>
+      <div class="desc">在新增/编辑股权激励时设置"解禁年限"与"批次"，即可自动生成解禁时间表</div>
+    </div>`;
+  }
+  const groups = {};
+  all.forEach(item => {
+    const y = new Date(item.date).getFullYear();
+    if (!groups[y]) groups[y] = [];
+    groups[y].push(item);
+  });
+  let html = '';
+  Object.keys(groups).sort().forEach(y => {
+    const items = groups[y];
+    const yearShares = items.reduce((s, i) => s + i.shares, 0);
+    const yearAmount = items.reduce((s, i) => s + i.amount, 0);
+    html += `<div class="section-title" style="margin:16px 4px 8px;">${y}年 · 解禁 ${fmtMoney(Math.round(yearShares))} 股 · 预计 ¥${fmtMoney(Math.round(yearAmount))}</div>`;
+    items.forEach(item => {
+      const passed = new Date(item.date) <= new Date();
+      html += `<div class="project-card" style="cursor:pointer;" onclick="showEquityDetail('${item.grant.id}')">
+        <div class="project-header">
+          <div class="project-info">
+            <div class="project-name"><span class="project-color" style="background:${item.grant.color}"></span>${item.grant.name} · 第${item.batch}批</div>
+            <div class="project-latest">${fmtDate(item.date)} 解禁</div>
+            <div class="project-change ${passed ? 'up' : 'flat'}">${fmtMoney(Math.round(item.shares))} 股 · 预计 ¥${fmtMoney(Math.round(item.amount))} ${passed ? '· 已到期' : ''}</div>
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+  return html;
+}
+
 function showAddEquitySheet() {
+  const today = fmtDateInput(new Date());
   openSheet(`
     <div class="sheet-title">新增股权激励</div>
     <div class="sheet-body">
@@ -1969,6 +2057,26 @@ function showAddEquitySheet() {
         <label class="form-label">股数（授予总股数）</label>
         <input type="number" class="form-input amount-input" id="eqShares" placeholder="如：50000" step="1">
       </div>
+      <div class="form-group">
+        <label class="form-label">授予日期</label>
+        <input type="date" class="form-input" id="eqGrantDate" value="${today}">
+      </div>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;margin:4px 0 4px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:10px;">解禁计划（自动生成每批时间/股数/预计金额）</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label">解禁年限（年）</label>
+          <input type="number" class="form-input amount-input" id="eqVestYears" value="5" step="1" min="1">
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label">解禁批次（次）</label>
+          <input type="number" class="form-input amount-input" id="eqVestBatches" value="5" step="1" min="1">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">首批解禁（授予后第几年）</label>
+          <input type="number" class="form-input amount-input" id="eqVestStart" value="1" step="1" min="0">
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:8px;">例：5年/5批/首批第1年 → 每年解禁1/5股数</div>
+      </div>
     </div>
     <div class="sheet-actions">
       <button class="btn-primary" onclick="saveEquity()">创建</button>
@@ -1983,6 +2091,10 @@ function saveEquity() {
   const grantPrice = parseFloat(document.getElementById('eqPrice').value);
   const totalShares = parseFloat(document.getElementById('eqShares').value);
   if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
+  const gd = document.getElementById('eqGrantDate').value;
+  const vestYears = parseInt(document.getElementById('eqVestYears').value) || 0;
+  const vestBatches = parseInt(document.getElementById('eqVestBatches').value) || 0;
+  const vestStartYear = parseInt(document.getElementById('eqVestStart').value) || 0;
   state.equity.push({
     id: uid(),
     name: name || '股权激励',
@@ -1990,6 +2102,10 @@ function saveEquity() {
     totalAmount: isNaN(totalAmount) ? 0 : totalAmount,
     grantPrice: isNaN(grantPrice) ? 0 : grantPrice,
     totalShares: totalShares,
+    grantDate: gd ? new Date(gd + 'T00:00:00').toISOString() : new Date().toISOString(),
+    vestYears: vestYears,
+    vestBatches: vestBatches,
+    vestStartYear: vestStartYear,
     createdAt: new Date().toISOString(),
     vests: []
   });
@@ -2010,6 +2126,24 @@ function showEquityDetail(eqId) {
 
   const sorted = [...(g.vests || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
   let listHtml = '';
+
+  // 解禁计划（自动生成）
+  const plan = computeVestPlan(g);
+  let planHtml = '';
+  if (plan.length) {
+    planHtml = `<div class="section-title" style="margin:18px 0 8px;padding-left:4px;">解禁计划（${plan.length}批）</div><div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">`;
+    plan.forEach(p => {
+      const passed = new Date(p.date) <= new Date();
+      planHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);">
+        <div style="flex:1;padding-right:10px;">
+          <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${fmtDateFull(p.date)}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;">${fmtMoney(Math.round(p.shares))} 股 · 预计 ¥${fmtMoney(Math.round(p.amount))}</div>
+        </div>
+        <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-3)'};white-space:nowrap;">${passed ? '已到期' : '未到'}</div>
+      </div>`;
+    });
+    planHtml += `</div>`;
+  }
   if (sorted.length === 0) {
     listHtml = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:20px 0;">暂无解禁记录，点下方"记一笔解禁"添加</div>`;
   } else {
@@ -2055,6 +2189,7 @@ function showEquityDetail(eqId) {
         <span>解禁进度</span><span>${pct.toFixed(1)}%</span>
       </div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      ${planHtml}
       <div class="section-title" style="margin:18px 0 8px;padding-left:4px;">解禁记录（${sorted.length}）</div>
       <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">
         ${listHtml}
@@ -2198,6 +2333,7 @@ function deleteVest(eqId, vid) {
 function showEditEquitySheet(eqId) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
+  const gd = g.grantDate ? fmtDateInput(new Date(g.grantDate)) : fmtDateInput(new Date());
   openSheet(`
     <div class="sheet-title">编辑股权激励</div>
     <div class="sheet-body">
@@ -2217,6 +2353,25 @@ function showEditEquitySheet(eqId) {
         <label class="form-label">股数（授予总股数）</label>
         <input type="number" class="form-input amount-input" id="editEqShares" value="${g.totalShares}" step="1">
       </div>
+      <div class="form-group">
+        <label class="form-label">授予日期</label>
+        <input type="date" class="form-input" id="editEqGrantDate" value="${gd}">
+      </div>
+      <div style="background:var(--bg);border-radius:10px;padding:12px;margin:4px 0 4px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:10px;">解禁计划</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label">解禁年限（年）</label>
+          <input type="number" class="form-input amount-input" id="editEqVestYears" value="${g.vestYears||''}" step="1" min="1">
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label">解禁批次（次）</label>
+          <input type="number" class="form-input amount-input" id="editEqVestBatches" value="${g.vestBatches||''}" step="1" min="1">
+        </div>
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">首批解禁（授予后第几年）</label>
+          <input type="number" class="form-input amount-input" id="editEqVestStart" value="${g.vestStartYear||0}" step="1" min="0">
+        </div>
+      </div>
     </div>
     <div class="sheet-actions">
       <button class="btn-primary" onclick="updateEquity('${eqId}')">保存</button>
@@ -2233,10 +2388,18 @@ function updateEquity(eqId) {
   const grantPrice = parseFloat(document.getElementById('editEqPrice').value);
   const totalShares = parseFloat(document.getElementById('editEqShares').value);
   if (isNaN(totalShares) || totalShares <= 0) { toast('请输入有效股数'); return; }
+  const gd = document.getElementById('editEqGrantDate').value;
+  const vestYears = parseInt(document.getElementById('editEqVestYears').value) || 0;
+  const vestBatches = parseInt(document.getElementById('editEqVestBatches').value) || 0;
+  const vestStartYear = parseInt(document.getElementById('editEqVestStart').value) || 0;
   g.name = name || '股权激励';
   g.totalAmount = isNaN(totalAmount) ? 0 : totalAmount;
   g.grantPrice = isNaN(grantPrice) ? 0 : grantPrice;
   g.totalShares = totalShares;
+  g.grantDate = gd ? new Date(gd + 'T00:00:00').toISOString() : new Date().toISOString();
+  g.vestYears = vestYears;
+  g.vestBatches = vestBatches;
+  g.vestStartYear = vestStartYear;
   saveData();
   closeSheet();
   render();
