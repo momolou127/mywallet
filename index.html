@@ -844,6 +844,10 @@ function loadData() {
       state.records = data.records || [];
       state.goal = data.goal || 0;
       state.equity = Array.isArray(data.equity) ? data.equity : [];
+      // 如果存储的数据是空的（被清空过），重新生成演示数据
+      if (state.projects.length === 0 && state.records.length === 0 && (state.equity||[]).length === 0) {
+        seedDemo();
+      }
     } catch(e) { seedDemo(); }
   } else {
     seedDemo();
