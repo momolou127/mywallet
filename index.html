@@ -2223,20 +2223,22 @@ function renderEquityTimeView() {
           <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(expectAmount)}</div>
         </div>
       </div>` : ''}`;
-    // 分项明细：基于 itemDetails 渲染（isVested 决定状态和颜色）
+    // 分项明细：基于 itemDetails 渲染
     itemDetails.forEach(d => {
-      const statusColor = d.isVested ? 'var(--green)' : (d.planPassed ? 'var(--orange,#f59e0b)' : 'var(--text-2)');
-      const statusText = d.isVested ? ' 已解禁' : (d.planPassed ? ' 已到期' : '');
-      const valueColor = d.isVested ? 'var(--green)' : 'var(--text-1,#1d1d1f)';
+      // 日期显示：已解锁→实际发放日期+"已发放"；未解锁→计划日期+"解禁"
+      const displayDate = d.isVested && d.matchVest ? fmtDateFull(d.matchVest.date) : fmtDate(d.date);
+      const dateLabel = d.isVested ? ' 已发放' : ' 解禁';
+      // 金额颜色：已解锁绿色，其他默认
+      const amountColor = d.isVested ? 'var(--green)' : 'var(--text-2)';
       html += `<div onclick="showEquityDetail('${d.grant.id}')" style="cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--bg);">
         <span class="project-color" style="background:${d.grant.color};margin-top:6px;flex-shrink:0;"></span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:2px;">${d.grant.name} · 第${d.batch}批</div>
-          <div style="font-size:13px;color:var(--text-2);">${fmtDate(d.date)} 解禁</div>
+          <div style="font-size:13px;color:var(--text-2);">${displayDate}${dateLabel}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:14px;font-weight:700;color:${valueColor};">${Math.round(d.actualShares).toLocaleString('zh-CN')} 股</div>
-          <div style="font-size:12px;color:${statusColor};">¥${fmtMoney(d.actualAmount)}${statusText}</div>
+          <div style="font-size:14px;font-weight:700;color:${d.isVested ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${Math.round(d.actualShares).toLocaleString('zh-CN')} 股</div>
+          <div style="font-size:13px;font-weight:600;color:${amountColor};">¥${fmtMoney(d.actualAmount)}</div>
         </div>
       </div>`;
     });
