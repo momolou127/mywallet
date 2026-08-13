@@ -2345,67 +2345,71 @@ function saveEquity() {
 function showEquityDetail(eqId) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
-  const vest = getEquityVested(g);
-  const remain = getEquityRemaining(g);
   const total = Number(g.totalShares) || 0;
-  const pct = total > 0 ? Math.min(100, vest.shares / total * 100) : 0;
   const price = getCurrentPrice();
-  const remainVal = price * remain.shares;   // 剩余股数按现行股价估算
 
-  // 解禁计划（自动生成）——与解锁记录映射：已结清的批次显示实际值
+  // 解禁计划（自动生成）
   const plan = computeVestPlan(g);
   const vests = g.vests || [];
-  // 第一个尚未记录解锁的批次（供底部按钮使用，避免游离记录）
-  const recordedBatches = new Set(vests.filter(v => v.batch != null).map(v => v.batch));
-  const firstUnlockedBatch = (plan.find(p => !recordedBatches.has(p.batch)) || {}).batch || null;
+
+  // === 先做 plan-vest 映射（与下方渲染同逻辑），汇总从匹配结果计算 ===
+  const batchVests = vests.filter(v => v.batch != null);
+  const looseVests = vests.filter(v => v.batch == null);
+  const looseMatched = new Set();
+  const planMatched = plan.map(p => {
+    const passed = new Date(p.date) <= new Date();
+    const exact = batchVests.find(v => v.batch === p.batch);
+    let matched = exact;
+    if (!matched && passed && looseVests.length) {
+      let best = null, bestDiff = Infinity;
+      looseVests.forEach(v => {
+        if (looseMatched.has(v.id)) return;
+        const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
+        if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
+      });
+      if (best) { looseMatched.add(best.id); matched = best; }
+    }
+    return { ...p, passed, matched };
+  });
+
+  // 汇总：只统计有 vest 匹配的批次（与下方分项一致，不受游离旧记录影响）
+  const vestedShares = planMatched.reduce((s, m) => s + (m.matched ? (m.matched.shares || 0) : 0), 0);
+  const vestedAmount = planMatched.reduce((s, m) => s + (m.matched ? (m.matched.amount || 0) : 0), 0);
+  const remainShares = total - vestedShares;
+  const pct = total > 0 ? Math.min(100, vestedShares / total * 100) : 0;
+  const remainVal = price * remainShares;
+
+  // 第一个尚未记录解锁的批次
+  const firstUnlockedBatch = (planMatched.find(m => !m.matched) || {}).batch || null;
+
+  // 渲染解禁计划
   let planHtml = '';
   if (plan.length) {
     planHtml = `<div class="section-title" style="margin:18px 0 8px;padding-left:4px;">解禁计划（${plan.length}批）</div><div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">`;
 
-    // 匹配逻辑：优先按 batch 精确对应；无 batch 的旧记录用同股数/日期 fallback
-    const batchVests = vests.filter(v => v.batch != null);
-    const looseVests = vests.filter(v => v.batch == null);
-    const looseMatched = new Set();
-    plan.forEach(p => {
-      const passed = new Date(p.date) <= new Date();
-      const exact = batchVests.find(v => v.batch === p.batch);   // 精确匹配该批次
-      let matched = exact;
-      if (!matched && passed && looseVests.length) {
-        // 旧记录：同股数且日期接近该批次窗口
-        let best = null, bestDiff = Infinity;
-        looseVests.forEach(v => {
-          if (looseMatched.has(v.id)) return;
-          const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
-          if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
-        });
-        if (best) { looseMatched.add(best.id); matched = best; }
-      }
-
+    planMatched.forEach(p => {
       let displayShares = p.shares;
       let displayAmount = p.shares * price;
-      let statusText = passed ? '已解锁' : '未解锁';
-      let statusColor = passed ? 'var(--green)' : 'var(--text-3)';
+      let statusText = p.matched ? '已解锁' : (p.passed ? '已到期' : '未解锁');
+      let statusColor = p.matched ? 'var(--green)' : (p.passed ? 'var(--orange,#f59e0b)' : 'var(--text-3)');
       let noteText = '';
-      // 已解锁：显示实际解锁日期（而非计划日期）
-      let displayDate = fmtDateFull(p.date);   // 默认计划日期
-      if (matched) {
-        displayShares = matched.shares || p.shares;
-        displayAmount = matched.amount != null ? matched.amount : displayAmount;
+      let displayDate = fmtDateFull(p.date);
+
+      if (p.matched) {
+        displayShares = p.matched.shares || p.shares;
+        displayAmount = p.matched.amount != null ? p.matched.amount : displayAmount;
         statusText = '已解锁';
         statusColor = 'var(--green)';
-        displayDate = fmtDateFull(matched.date);   // 实际解锁日期！
-        if (matched.note) noteText = matched.note;
+        displayDate = fmtDateFull(p.matched.date);
+        if (p.matched.note) noteText = p.matched.note;
       }
 
-      // 已解锁：整行可点编辑；未解锁：整行可点记解锁（不再单独按钮占位）
-      const clickAction = matched
-        ? `onclick="showVestSheet('${eqId}', ${p.batch})"`
-        : `onclick="showVestSheet('${eqId}', ${p.batch})"`;
+      const clickAction = `onclick="showVestSheet('${eqId}', ${p.batch})"`;
 
       planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;" ${clickAction}>
         <div style="flex:1;padding-right:10px;">
           <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${displayDate}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${Math.round(displayShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(displayAmount)}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${p.matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${Math.round(displayShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(displayAmount)}</div>
           ${noteText ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${noteText}</div>` : ''}
         </div>
         <div style="font-size:12px;color:${statusColor};white-space:nowrap;flex-shrink:0;padding-left:6px;">${statusText}</div>
@@ -2431,10 +2435,10 @@ function showEquityDetail(eqId) {
           <span>授予总股数</span><span>${Math.round(total).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>已解禁</span><span>${Math.round(vest.shares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(vest.amount)}</span>
+          <span>已解禁</span><span>${Math.round(vestedShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(vestedAmount)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary);margin-top:8px;">
-          <span>剩余股数</span><span>${Math.round(remain.shares).toLocaleString('zh-CN')} 股</span>
+          <span>剩余股数</span><span>${Math.round(remainShares).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:2px;">
           <span></span><span>按现价 ¥${fmtMoney(price)} 估算 ¥${fmtMoney(remainVal)}</span>
