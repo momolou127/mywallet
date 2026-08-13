@@ -2339,9 +2339,6 @@ function showEquityDetail(eqId) {
   const price = getCurrentPrice();
   const remainVal = price * remain.shares;   // 剩余股数按现行股价估算
 
-  const sorted = [...(g.vests || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
-  let listHtml = '';
-
   // 解禁计划（自动生成）——与解锁记录映射：已结清的批次显示实际值
   const plan = computeVestPlan(g);
   const vests = g.vests || [];
@@ -2376,46 +2373,32 @@ function showEquityDetail(eqId) {
       let statusText = passed ? '已到期' : '未到';
       let statusColor = passed ? 'var(--green)' : 'var(--text-3)';
       let noteText = '';
+      // 已解锁：显示实际解锁日期（而非计划日期）
+      let displayDate = fmtDateFull(p.date);   // 默认计划日期
       if (matched) {
         displayShares = matched.shares || p.shares;
         displayAmount = matched.amount != null ? matched.amount : displayAmount;
         statusText = '已解锁';
         statusColor = 'var(--green)';
+        displayDate = fmtDateFull(matched.date);   // 实际解锁日期！
         if (matched.note) noteText = matched.note;
       }
 
-      // 每行右侧：已解锁显示标记+可改，未解锁显示"记解锁"按钮
-      const actionBtn = matched
-        ? `<button class="mini-btn" style="color:var(--green);" onclick="showVestSheet('${eqId}', ${p.batch})" title="修改">✓</button>`
-        : `<button class="mini-btn" onclick="showVestSheet('${eqId}', ${p.batch})" title="记解锁">记解锁</button>`;
+      // 已解锁：整行可点编辑；未解锁：整行可点记解锁（不再单独按钮占位）
+      const clickAction = matched
+        ? `onclick="showVestSheet('${eqId}', ${p.batch})"`
+        : `onclick="showVestSheet('${eqId}', ${p.batch})"`;
 
-      planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);">
+      planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;" ${clickAction}>
         <div style="flex:1;padding-right:10px;">
-          <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${fmtDateFull(p.date)}</div>
+          <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${displayDate}</div>
           <div style="font-size:15px;font-weight:600;margin-top:3px;color:${matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${fmtMoney(Math.round(displayShares))} 股 · ¥${fmtMoney(Math.round(displayAmount))}</div>
           ${noteText ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${noteText}</div>` : ''}
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
-          <div style="font-size:12px;color:${statusColor};white-space:nowrap;">${statusText}</div>
-          ${actionBtn}
-        </div>
+        <div style="font-size:12px;color:${statusColor};white-space:nowrap;flex-shrink:0;padding-left:6px;">${statusText}</div>
       </div>`;
     });
     planHtml += `</div>`;
-  }
-  if (sorted.length === 0) {
-    listHtml = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:20px 0;">在上方解禁计划批次右侧点"记解锁"填写解锁信息</div>`;
-  } else {
-    sorted.forEach(v => {
-      listHtml += `<div onclick="editVest('${eqId}','${v.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:0.5px solid var(--border);">
-        <div style="flex:1;padding-right:10px;">
-          <div style="font-size:12px;color:var(--text-3);">${fmtDateFull(v.date)}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;">解禁 ${fmtMoney(Math.round(v.shares))} 股 · ¥${fmtMoney(v.amount)}</div>
-          ${v.note ? `<div style="font-size:12px;color:var(--text-3);margin-top:2px;">备注：${v.note}</div>` : ''}
-        </div>
-        <button class="mini-btn" onclick="event.stopPropagation();deleteVest('${eqId}','${v.id}')" title="删除" style="color:var(--red);font-size:15px;">🗑</button>
-      </div>`;
-    });
   }
 
   openSheet(`
@@ -2449,13 +2432,8 @@ function showEquityDetail(eqId) {
       </div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
       ${planHtml}
-      <div class="section-title" style="margin:18px 0 8px;padding-left:4px;">已解锁记录（${sorted.length}）</div>
-      <div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">
-        ${listHtml}
-      </div>
     </div>
     <div class="sheet-actions">
-      <button class="btn-primary" onclick="showVestSheet('${eqId}', ${firstUnlockedBatch})">＋记解锁</button>
       <button class="btn-primary" style="background:var(--green)" onclick="showEditEquitySheet('${eqId}')">编辑</button>
       <button class="btn-danger" onclick="deleteEquity('${eqId}')">删除</button>
       <button class="btn-secondary" onclick="closeSheet()">关闭</button>
