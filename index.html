@@ -793,23 +793,35 @@ body {
 
 /* 股权激励表单：修复 sheet-body 负margin 导致标签截断 */
 .sheet-body.eq-form { margin: 0; padding: 0; }
-.sheet-body.eq-form .form-group { padding: 0 4px; overflow-x: hidden; }   /* 裁剪 date input 日历图标溢出 */
-/* 关键：iOS Safari 的 date 输入有固有最小宽度，会溢出其它框。
-   用 min-width:0 解除固有最小宽度，让 width:100% 真正生效，与文本/数字框齐平 */
+.sheet-body.eq-form .form-group { padding: 0 4px; }
+/* 统一所有输入框宽度，强制约束 */
 .sheet-body.eq-form .form-group input,
 .sheet-body.eq-form .form-group select,
 .sheet-body.eq-form .form-group textarea {
   width: 100%;
   min-width: 0;
+  max-width: 100%;
   box-sizing: border-box;
 }
-/* 单独再针对 date 兜底，确保各浏览器一致宽度 */
+/* date input 终极修复：隐藏 iOS 原生日历图标，让宽度与其它框完全一致 */
 .sheet-body.eq-form input[type="date"].form-input {
+  appearance: none;
+  -webkit-appearance: none;
   width: 100% !important;
   min-width: 0 !important;
-  box-sizing: border-box;
-  /* 缩小日历图标区域，减少溢出 */
-  padding-right: 8px !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.sheet-body.eq-form input[type="date"].form-input::-webkit-calendar-picker-indicator {
+  display: none;          /* 隐藏日历图标（iOS 点击框仍弹出日期选择器）*/
+}
+.sheet-body.eq-form input[type="date"].form-input::-webkit-inner-spin-button,
+.sheet-body.eq-form input[type="date"].form-input::-webkit-clear-button,
+.sheet-body.eq-form input[type="date"].form-input::-webkit-datetime-edit-text,
+.sheet-body.eq-form input[type="date"].form-input::-webkit-datetime-edit-month-field,
+.sheet-body.eq-form input[type="date"].form-input::-webkit-datetime-edit-day-field,
+.sheet-body.eq-form input[type="date"].form-input::-webkit-datetime-edit-year-field {
+  /* 保持原生日期文本显示不变 */
 }
 </style>
 </head>
@@ -2051,26 +2063,39 @@ function renderEquity() {
     const total = Number(g.totalShares) || 0;
     const pct = total > 0 ? Math.min(100, vest.shares / total * 100) : 0;
     const price = getCurrentPrice();
-    const remainVal = price * remain.shares;   // 预计金额按现行股价
+    const remainVal = price * remain.shares;
     const neg = remain.shares < 0;
-    html += `<div class="project-card" onclick="showEquityDetail('${g.id}')" style="padding:14px 16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+
+    // 与"按解禁时间"视图一致的年份聚合卡片风格：顶部标题 + 两列汇总 + 底部详情
+    html += `<div class="project-card" onclick="showEquityDetail('${g.id}')" style="padding:16px;cursor:pointer;">
+      <!-- 标题行 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="project-color" style="background:${g.color};flex-shrink:0;"></span>
-          <span style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);">${g.name}</span>
+          <span style="font-size:16px;font-weight:700;color:var(--text-1,#1d1d1f);">${g.name}</span>
         </div>
         <div style="display:flex;gap:6px;" onclick="event.stopPropagation()">
           <button class="mini-btn" onclick="showVestSheet('${g.id}')" title="记解禁">＋</button>
           <button class="mini-btn" onclick="showEquityDetail('${g.id}')" title="详情">›</button>
         </div>
       </div>
-      <div style="font-size:15px;font-weight:700;color:var(--text-1,#1d1d1f);margin-bottom:2px;">剩余 ${fmtMoney(Math.round(remain.shares))} 股 · 预计 ¥${fmtMoney(Math.round(remainVal))}</div>
-      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">${neg ? '⚠ 解禁已超过授予股数' : ('按现价 ¥' + fmtMoney(price) + ' 估算')}</div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-bottom:6px;">
-        <span>授予 ${fmtMoney(Math.round(total))} 股 · 授予价 ¥${fmtMoney(g.grantPrice)}</span>
-        <span>已解禁 ${fmtMoney(Math.round(vest.shares))} 股</span>
+      <!-- 两列汇总（与按解禁时间格式一致）-->
+      <div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">剩余股数</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(remain.shares))} 股</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计金额</div>
+          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(remainVal))}</div>
+        </div>
       </div>
-      <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+      <!-- 底部详情行 -->
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);">
+        <span>授予 ${fmtMoney(Math.round(total))} 股 · 价 ¥${fmtMoney(g.grantPrice)}</span>
+        <span>已解禁 ${fmtMoney(Math.round(vest.shares))} 股 · ${pct.toFixed(0)}%</span>
+      </div>
+      ${pct > 0 && pct < 100 ? `<div class="goal-bar-track" style="margin-top:6px;"><div class="goal-bar-fill" style="width:${pct}%"></div></div>` : ''}
     </div>`;
   });
   content.innerHTML = html;
