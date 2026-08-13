@@ -2063,19 +2063,39 @@ function renderEquityTimeView() {
     const items = groups[y];
     const yearShares = items.reduce((s, i) => s + i.shares, 0);
     const yearAmount = items.reduce((s, i) => s + i.amount, 0);
-    html += `<div class="section-title" style="margin:16px 4px 8px;">${y}年 · 解禁 ${fmtMoney(Math.round(yearShares))} 股 · 预计 ¥${fmtMoney(Math.round(yearAmount))}</div>`;
+
+    // 年份聚合卡片：顶部汇总 + 下面分项明细
+    html += `<div class="project-card" style="padding:16px;cursor:default;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${y}年</div>
+        <div style="font-size:13px;color:var(--text-2);">共 ${items.length} 批次</div>
+      </div>
+      <div style="display:flex;gap:16px;padding-bottom:12px;border-bottom:0.5px solid var(--border);margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">解禁股数</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(yearShares))} 股</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计金额</div>
+          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(yearAmount))}</div>
+        </div>
+      </div>`;
+    // 分项明细
     items.forEach(item => {
       const passed = new Date(item.date) <= new Date();
-      html += `<div class="project-card" style="cursor:pointer;" onclick="showEquityDetail('${item.grant.id}')">
-        <div class="project-header">
-          <div class="project-info">
-            <div class="project-name"><span class="project-color" style="background:${item.grant.color}"></span>${item.grant.name} · 第${item.batch}批</div>
-            <div class="project-latest">${fmtDate(item.date)} 解禁</div>
-            <div class="project-change ${passed ? 'up' : 'flat'}">${fmtMoney(Math.round(item.shares))} 股 · 预计 ¥${fmtMoney(Math.round(item.amount))} ${passed ? '· 已到期' : ''}</div>
-          </div>
+      html += `<div onclick="showEquityDetail('${item.grant.id}')" style="cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--bg);">
+        <span class="project-color" style="background:${item.grant.color};margin-top:6px;flex-shrink:0;"></span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:2px;">${item.grant.name} · 第${item.batch}批</div>
+          <div style="font-size:13px;color:var(--text-2);">${fmtDate(item.date)} 解禁</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${fmtMoney(Math.round(item.shares))} 股</div>
+          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(Math.round(item.amount))}${passed ? ' 已到期' : ''}</div>
         </div>
       </div>`;
     });
+    html += `</div>`; // 关闭年份卡片
   });
   return html;
 }
