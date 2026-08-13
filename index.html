@@ -374,26 +374,33 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;   /* 垂直居中 */
   gap: 2px;
   color: #b0b0b6;          /* 非选中：更浅的灰色 */
   font-size: 10px;         /* 非选中：稍小字号 */
   cursor: pointer;
-  padding: 4px;
-  transition: color 0.2s, transform 0.15s;
+  padding: 6px 0;
+  transition: color 0.2s, opacity 0.2s;
   opacity: 0.65;           /* 非选中：降低不透明度 */
+  min-width: 0;            /* 防止内容撑开 */
 }
-/* 选中态：彩色 + 加粗 + 图标也上色 + 微放大 */
+/* 选中态：彩色 + 加粗 + 图标也上色（不再放大） */
 .nav-item.active {
   color: var(--primary);
   font-weight: 700;
   font-size: 11px;
   opacity: 1;
-  transform: scale(1.03);
 }
+/* 图标固定尺寸容器，确保4个tab图标一样大 */
 .nav-item .nav-icon {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 18px;
   line-height: 1;
-  transition: filter 0.2s;
+  overflow: hidden;
 }
 /* 非选中图标去色 */
 .nav-item:not(.active) .nav-icon {
@@ -786,7 +793,7 @@ body {
 
 /* 股权激励表单：修复 sheet-body 负margin 导致标签截断 */
 .sheet-body.eq-form { margin: 0; padding: 0; }
-.sheet-body.eq-form .form-group { padding: 0 4px; }
+.sheet-body.eq-form .form-group { padding: 0 4px; overflow-x: hidden; }   /* 裁剪 date input 日历图标溢出 */
 /* 关键：iOS Safari 的 date 输入有固有最小宽度，会溢出其它框。
    用 min-width:0 解除固有最小宽度，让 width:100% 真正生效，与文本/数字框齐平 */
 .sheet-body.eq-form .form-group input,
@@ -801,6 +808,8 @@ body {
   width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box;
+  /* 缩小日历图标区域，减少溢出 */
+  padding-right: 8px !important;
 }
 </style>
 </head>
