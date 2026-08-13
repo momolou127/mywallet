@@ -2339,19 +2339,54 @@ function showEquityDetail(eqId) {
   const sorted = [...(g.vests || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
   let listHtml = '';
 
-  // 解禁计划（自动生成）
+  // 解禁计划（自动生成）——与解禁记录映射：已结清的批次显示实际值
   const plan = computeVestPlan(g);
+  const vests = g.vests || [];
   let planHtml = '';
   if (plan.length) {
     planHtml = `<div class="section-title" style="margin:18px 0 8px;padding-left:4px;">解禁计划（${plan.length}批）</div><div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">`;
+
+    // 为每个计划批次匹配最近的实际解禁记录（±90天窗口，每个vest只匹配一次）
+    const matchedVestIds = new Set();
     plan.forEach(p => {
       const passed = new Date(p.date) <= new Date();
+      let displayShares = p.shares;
+      let displayAmount = p.shares * price;
+      let statusText = passed ? '已到期' : '未到';
+      let statusColor = passed ? 'var(--green)' : 'var(--text-3)';
+      let noteText = '';
+
+      // 匹配实际解禁记录：找距离该批次计划日期最近的、未被其他批次占用的 vest
+      if (passed && vests.length > 0) {
+        const planDate = new Date(p.date);
+        let bestMatch = null;
+        let bestDiff = Infinity;
+        vests.forEach(v => {
+          if (matchedVestIds.has(v.id)) return;   // 已被其他批次占用
+          const vDate = new Date(v.date);
+          const diffDays = Math.abs((vDate - planDate) / 86400000);
+          if (diffDays <= 90 && diffDays < bestDiff) {   // ±90天窗口
+            bestDiff = diffDays;
+            bestMatch = v;
+          }
+        });
+        if (bestMatch) {
+          matchedVestIds.add(bestMatch.id);
+          displayShares = bestMatch.shares || p.shares;
+          displayAmount = bestMatch.amount || displayAmount;
+          statusText = '已解禁';
+          statusColor = 'var(--green)';
+          if (bestMatch.note) noteText = bestMatch.note;
+        }
+      }
+
       planHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;padding-right:10px;">
           <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${fmtDateFull(p.date)}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;">${fmtMoney(Math.round(p.shares))} 股 · 预计 ¥${fmtMoney(Math.round(p.shares * price))}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;">${fmtMoney(Math.round(displayShares))} 股 · ¥${fmtMoney(Math.round(displayAmount))}</div>
+          ${noteText ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${noteText}</div>` : ''}
         </div>
-        <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-3)'};white-space:nowrap;">${passed ? '已到期' : '未到'}</div>
+        <div style="font-size:12px;color:${statusColor};white-space:nowrap;">${statusText}</div>
       </div>`;
     });
     planHtml += `</div>`;
