@@ -2126,25 +2126,55 @@ function renderEquityTimeView() {
   let html = '';
   Object.keys(groups).sort().forEach(y => {
     const items = groups[y];
-    const yearShares = items.reduce((s, i) => s + i.shares, 0);
-    const yearAmount = items.reduce((s, i) => s + i.shares * price, 0);   // 按现行股价估算
+    const now = new Date();
 
-    // 年份聚合卡片：顶部汇总 + 下面分项明细
+    // 拆分：已到期 vs 未到期
+    const passedItems = items.filter(i => new Date(i.date) <= now);
+    const futureItems = items.filter(i => new Date(i.date) > now);
+
+    // === 已解禁：从实际 vests 记录中取该年份的真实数据 ===
+    let vestedShares = 0, vestedAmount = 0;
+    list.forEach(g => {
+      (g.vests || []).forEach(v => {
+        if (new Date(v.date).getFullYear() === parseInt(y)) {
+          vestedShares += (v.shares || 0);
+          vestedAmount += (v.amount || 0);
+        }
+      });
+    });
+
+    // === 预计解禁：未到期批次的股数 × 现行股价 ===
+    const expectShares = futureItems.reduce((s, i) => s + i.shares, 0);
+    const expectAmount = expectShares * price;
+
+    // 年份聚合卡片：两行汇总（已解禁 + 预计解禁）+ 下面分项明细
     html += `<div class="project-card" style="padding:16px;cursor:default;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
         <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${y}年</div>
         <div style="font-size:13px;color:var(--text-2);">共 ${items.length} 批次</div>
       </div>
-      <div style="display:flex;gap:16px;padding-bottom:12px;border-bottom:0.5px solid var(--border);margin-bottom:8px;">
+      <!-- 第一行：已解禁（实际数据）-->
+      <div style="display:flex;gap:16px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;">
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">解禁股数</div>
-          <div style="font-size:18px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(yearShares))} 股</div>
+          <div style="font-size:11px;color:var(--green);margin-bottom:2px;">已解禁</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(vestedShares))} 股</div>
         </div>
+        <div style="flex:1;text-align:right;">
+          <div style="font-size:11px;color:var(--green);margin-bottom:2px;">&nbsp;</div>
+          <div style="font-size:17px;font-weight:700;color:var(--green);">¥${fmtMoney(Math.round(vestedAmount))}</div>
+        </div>
+      </div>
+      <!-- 第二行：预计解禁（现行股价估算）-->
+      ${futureItems.length > 0 ? `<div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:4px;">
         <div style="flex:1;">
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计金额</div>
-          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(yearAmount))}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计解禁</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(expectShares))} 股</div>
         </div>
-      </div>`;
+        <div style="flex:1;text-align:right;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">&nbsp;</div>
+          <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(expectAmount))}</div>
+        </div>
+      </div>` : '<div style="height:6px;"></div>'}`;
     // 分项明细
     items.forEach(item => {
       const passed = new Date(item.date) <= new Date();
