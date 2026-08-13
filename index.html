@@ -968,7 +968,7 @@ function seedDemo() {
 
 // ===== 工具 =====
 function fmtMoney(n) {
-  return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso) {
   const d = new Date(iso);
@@ -2086,17 +2086,17 @@ function renderEquity() {
       <div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:8px;">
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">剩余股数</div>
-          <div style="font-size:18px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(remain.shares))} 股</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text-1,#1d1d1f);">${Math.round(remain.shares).toLocaleString('zh-CN')} 股</div>
         </div>
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计金额</div>
-          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(remainVal))}</div>
+          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(remainVal)}</div>
         </div>
       </div>
       <!-- 底部详情行 -->
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);">
-        <span>授予 ${fmtMoney(Math.round(total))} 股 · 价 ¥${fmtMoney(g.grantPrice)}</span>
-        <span>已解禁 ${fmtMoney(Math.round(vest.shares))} 股 · ${pct.toFixed(0)}%</span>
+        <span>授予 ${Math.round(total).toLocaleString('zh-CN')} 股 · 价 ¥${fmtMoney(g.grantPrice)}</span>
+        <span>已解禁 ${Math.round(vest.shares).toLocaleString('zh-CN')} 股 · ${pct.toFixed(0)}%</span>
       </div>
       ${pct > 0 && pct < 100 ? `<div class="goal-bar-track" style="margin-top:6px;"><div class="goal-bar-fill" style="width:${pct}%"></div></div>` : ''}
     </div>`;
@@ -2160,22 +2160,22 @@ function renderEquityTimeView() {
       <div style="display:flex;gap:16px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--green);margin-bottom:2px;">已解禁</div>
-          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(vestedShares))} 股</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${Math.round(vestedShares).toLocaleString('zh-CN')} 股</div>
         </div>
         <div style="flex:1;text-align:right;">
           <div style="font-size:11px;color:var(--green);margin-bottom:2px;">&nbsp;</div>
-          <div style="font-size:17px;font-weight:700;color:var(--green);">¥${fmtMoney(Math.round(vestedAmount))}</div>
+          <div style="font-size:17px;font-weight:700;color:var(--green);">¥${fmtMoney(vestedAmount)}</div>
         </div>
       </div>
       <!-- 第二行：预计解禁（现行股价估算）-->
       ${futureItems.length > 0 ? `<div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:4px;">
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计解禁</div>
-          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${fmtMoney(Math.round(expectShares))} 股</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${Math.round(expectShares).toLocaleString('zh-CN')} 股</div>
         </div>
         <div style="flex:1;text-align:right;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">&nbsp;</div>
-          <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(expectAmount))}</div>
+          <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(expectAmount)}</div>
         </div>
       </div>` : '<div style="height:6px;"></div>'}`;
     // 分项明细：已到期取实际vests记录，未到期取计划值×现行股价
@@ -2202,8 +2202,8 @@ function renderEquityTimeView() {
           <div style="font-size:13px;color:var(--text-2);">${fmtDate(item.date)} 解禁</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${fmtMoney(Math.round(actualShares))} 股</div>
-          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(Math.round(actualAmount))}${passed ? ' 已解禁' : ''}</div>
+          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${Math.round(actualShares).toLocaleString('zh-CN')} 股</div>
+          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(actualAmount)}${passed ? ' 已解禁' : ''}</div>
         </div>
       </div>`;
     });
@@ -2392,7 +2392,7 @@ function showEquityDetail(eqId) {
       planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;" ${clickAction}>
         <div style="flex:1;padding-right:10px;">
           <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${displayDate}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${fmtMoney(Math.round(displayShares))} 股 · ¥${fmtMoney(Math.round(displayAmount))}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${Math.round(displayShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(displayAmount)}</div>
           ${noteText ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${noteText}</div>` : ''}
         </div>
         <div style="font-size:12px;color:${statusColor};white-space:nowrap;flex-shrink:0;padding-left:6px;">${statusText}</div>
@@ -2415,16 +2415,16 @@ function showEquityDetail(eqId) {
           <span>授予价</span><span>¥${fmtMoney(g.grantPrice)}/股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>授予总股数</span><span>${fmtMoney(Math.round(total))} 股</span>
+          <span>授予总股数</span><span>${Math.round(total).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>已解禁</span><span>${fmtMoney(Math.round(vest.shares))} 股 · ¥${fmtMoney(vest.amount)}</span>
+          <span>已解禁</span><span>${Math.round(vest.shares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(vest.amount)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary);margin-top:8px;">
-          <span>剩余股数</span><span>${fmtMoney(Math.round(remain.shares))} 股</span>
+          <span>剩余股数</span><span>${Math.round(remain.shares).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:2px;">
-          <span></span><span>按现价 ¥${fmtMoney(price)} 估算 ¥${fmtMoney(Math.round(remainVal))}</span>
+          <span></span><span>按现价 ¥${fmtMoney(price)} 估算 ¥${fmtMoney(remainVal)}</span>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
@@ -2482,8 +2482,8 @@ function showVestSheet(eqId, batch) {
     : '';
   const title = batch ? `第${batch}批解锁` : '记一笔解禁';
   const sub = batch
-    ? `计划 ${fmtMoney(Math.round((Number(g.totalShares)||0) / (parseInt(g.vestBatches)||1)))} 股 · 填写实际解锁信息`
-    : `当前剩余 <b style="color:var(--primary)">${fmtMoney(Math.round(remain.shares))}</b> 股（授予 ${fmtMoney(Math.round(g.totalShares))} 股）`;
+    ? `计划 ${Math.round((Number(g.totalShares)||0) / (parseInt(g.vestBatches)||1)).toLocaleString('zh-CN')} 股 · 填写实际解锁信息`
+    : `当前剩余 <b style="color:var(--primary)">${Math.round(remain.shares).toLocaleString('zh-CN')}</b> 股（授予 ${Math.round(g.totalShares).toLocaleString('zh-CN')} 股）`;
 
   openSheet(`
     <div class="sheet-title">${title}</div>
