@@ -2370,7 +2370,7 @@ function showEquityDetail(eqId) {
 
       let displayShares = p.shares;
       let displayAmount = p.shares * price;
-      let statusText = passed ? '已到期' : '未到';
+      let statusText = passed ? '已解锁' : '未解锁';
       let statusColor = passed ? 'var(--green)' : 'var(--text-3)';
       let noteText = '';
       // 已解锁：显示实际解锁日期（而非计划日期）
@@ -2450,8 +2450,36 @@ function showVestSheet(eqId, batch) {
   const remain = getEquityRemaining(g);
 
   // 批次模式：查找该批次已有的解锁记录（预填）
+  // 匹配策略与详情页解禁计划渲染一致：精确batch → 股数接近+日期fallback
   let existing = null;
-  if (batch) existing = (g.vests || []).find(v => v.batch === batch) || null;
+  if (batch) {
+    existing = (g.vests || []).find(v => v.batch === batch) || null;
+    if (!existing && (g.vests||[]).length > 0) {
+      const plan = computeVestPlan(g);
+      const planBatch = plan.find(p => p.batch === batch);
+      if (planBatch) {
+        const pd = new Date(planBatch.date);
+        const perShare = planBatch.shares;
+        // 找股数最接近且未被占用的 vest（无硬性天数限制，兼容各种时间偏差）
+        const usedIds = new Set((g.vests||[]).filter(v=>v.batch!=null).map(v=>v.id));
+        let best = null, bestScore = Infinity;
+        (g.vests||[]).forEach(v => {
+          if (usedIds.has(v.id)) return;   // 已被其他批次占用
+          const shareDiff = Math.abs((v.shares||0) - perShare);
+          const dayDiff = Math.abs((new Date(v.date) - pd) / 86400000);
+          // 综合评分：股数差异权重更高
+          const score = shareDiff * 10 + dayDiff;
+          if (score < bestScore) { best = v; bestScore = score; }
+        });
+        // 只要股数差异不超过50%就算合理匹配
+        if (best && bestScore < perShare * 5) existing = best;
+      }
+    }
+  }
+  // 预填日期（existing 存在时取实际解锁时间），统一用本地时区折算，避免字符串减数字产生 NaN
+  const exLocal = existing
+    ? new Date(new Date(existing.date).getTime() - new Date(existing.date).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
   const title = batch ? `第${batch}批解锁` : '记一笔解禁';
   const sub = batch
     ? `计划 ${fmtMoney(Math.round((Number(g.totalShares)||0) / (parseInt(g.vestBatches)||1)))} 股 · 填写实际解锁信息`
@@ -2463,7 +2491,7 @@ function showVestSheet(eqId, batch) {
       <div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-2);margin-bottom:12px;">${sub}</div>
       <div class="form-group">
         <label class="form-label">解锁日期</label>
-        <input type="datetime-local" class="form-input" id="vestDate" value="${existing ? new Date(existing.date - new Date(existing.date).getTimezoneOffset()*60000).toISOString().slice(0,16) : localNow}">
+        <input type="datetime-local" class="form-input" id="vestDate" value="${existing ? exLocal : localNow}">
       </div>
       <div class="form-group">
         <label class="form-label">解锁股数（股）</label>
