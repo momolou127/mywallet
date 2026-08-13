@@ -769,6 +769,10 @@ body {
 .sub-tabs { display: flex; gap: 8px; padding: 10px 16px 4px; }
 .sub-tab { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; color: var(--text-2); background: var(--bg); border-radius: 10px; cursor: pointer; }
 .sub-tab.active { color: #fff; background: var(--primary); font-weight: 600; }
+
+/* 股权激励表单：修复 sheet-body 负margin 导致标签截断 */
+.sheet-body.eq-form { margin: 0; padding: 0; }
+.sheet-body.eq-form .form-group { padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -2062,12 +2066,14 @@ function renderEquityTimeView() {
 
 function showAddEquitySheet() {
   const today = fmtDateInput(new Date());
+  const curYear = new Date().getFullYear();
   openSheet(`
     <div class="sheet-title">新增股权激励</div>
-    <div class="sheet-body">
+    <div class="sheet-body eq-form">
       <div class="form-group">
-        <label class="form-label">名称（选填）</label>
-        <input type="text" class="form-input" id="eqName" placeholder="如：2024年限制性股票、期权池...">
+        <label class="form-label">授予年份</label>
+        <input type="number" class="form-input" id="eqYear" placeholder="如：2025" value="${curYear}" min="2000" max="2099">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;">自动命名为"XXXX年中长期激励"</div>
       </div>
       <div class="form-group">
         <label class="form-label">股权激励金额（元）</label>
@@ -2102,7 +2108,9 @@ function showAddEquitySheet() {
 }
 
 function saveEquity() {
-  const name = document.getElementById('eqName').value.trim();
+  const yearVal = document.getElementById('eqYear').value.trim();
+  const year = parseInt(yearVal) || new Date().getFullYear();
+  const name = year + '年中长期激励';
   const totalAmount = parseFloat(document.getElementById('eqAmount').value);
   const grantPrice = parseFloat(document.getElementById('eqPrice').value);
   const totalShares = parseFloat(document.getElementById('eqShares').value);
@@ -2351,12 +2359,16 @@ function showEditEquitySheet(eqId) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
   const gd = g.grantDate ? fmtDateInput(new Date(g.grantDate)) : fmtDateInput(new Date());
+  // 从名称中提取年份（如 "2025年中长期激励" -> 2025）
+  const nameYearMatch = g.name.match(/^(\d{4})/);
+  const editYear = nameYearMatch ? nameYearMatch[1] : new Date().getFullYear();
   openSheet(`
     <div class="sheet-title">编辑股权激励</div>
-    <div class="sheet-body">
+    <div class="sheet-body eq-form">
       <div class="form-group">
-        <label class="form-label">名称</label>
-        <input type="text" class="form-input" id="editEqName" value="${g.name}" maxlength="30">
+        <label class="form-label">授予年份</label>
+        <input type="number" class="form-input" id="editEqYear" value="${editYear}" min="2000" max="2099">
+        <div style="font-size:11px;color:var(--text-3);margin-top:4px;">自动命名为"${editYear}年中长期激励"</div>
       </div>
       <div class="form-group">
         <label class="form-label">股权激励金额（元）</label>
@@ -2393,7 +2405,9 @@ function showEditEquitySheet(eqId) {
 function updateEquity(eqId) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
-  const name = document.getElementById('editEqName').value.trim();
+  const yearVal = document.getElementById('editEqYear').value.trim();
+  const year = parseInt(yearVal) || new Date().getFullYear();
+  const name = year + '年中长期激励';
   const totalAmount = parseFloat(document.getElementById('editEqAmount').value);
   const grantPrice = parseFloat(document.getElementById('editEqPrice').value);
   const totalShares = parseFloat(document.getElementById('editEqShares').value);
