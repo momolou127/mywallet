@@ -2175,9 +2175,23 @@ function renderEquityTimeView() {
           <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(Math.round(expectAmount))}</div>
         </div>
       </div>` : '<div style="height:6px;"></div>'}`;
-    // 分项明细
+    // 分项明细：已到期取实际vests记录，未到期取计划值×现行股价
     items.forEach(item => {
       const passed = new Date(item.date) <= new Date();
+      // 已到期的批次：从实际解禁记录中查找匹配的vest（同grant+同年）
+      let actualAmount = item.shares * price;   // 默认用现行股价估算
+      let actualShares = item.shares;
+      if (passed) {
+        const vestYear = new Date(item.date).getFullYear();
+        const matchVest = (item.grant.vests || []).find(v =>
+          new Date(v.date).getFullYear() === vestYear &&
+          Math.abs((v.shares || 0) - item.shares) < 1   // 股数匹配（容差1股）
+        );
+        if (matchVest) {
+          actualShares = matchVest.shares || item.shares;
+          actualAmount = matchVest.amount || actualAmount;  // 用实际记录金额
+        }
+      }
       html += `<div onclick="showEquityDetail('${item.grant.id}')" style="cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--bg);">
         <span class="project-color" style="background:${item.grant.color};margin-top:6px;flex-shrink:0;"></span>
         <div style="flex:1;min-width:0;">
@@ -2185,8 +2199,8 @@ function renderEquityTimeView() {
           <div style="font-size:13px;color:var(--text-2);">${fmtDate(item.date)} 解禁</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${fmtMoney(Math.round(item.shares))} 股</div>
-          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(Math.round(item.shares * price))}${passed ? ' 已到期' : ''}</div>
+          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${fmtMoney(Math.round(actualShares))} 股</div>
+          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(Math.round(actualAmount))}${passed ? ' 已解禁' : ''}</div>
         </div>
       </div>`;
     });
