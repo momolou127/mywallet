@@ -774,6 +774,21 @@ body {
 /* 股权激励表单：修复 sheet-body 负margin 导致标签截断 */
 .sheet-body.eq-form { margin: 0; padding: 0; }
 .sheet-body.eq-form .form-group { padding: 0 4px; }
+/* 关键：iOS Safari 的 date 输入有固有最小宽度，会溢出其它框。
+   用 min-width:0 解除固有最小宽度，让 width:100% 真正生效，与文本/数字框齐平 */
+.sheet-body.eq-form .form-group input,
+.sheet-body.eq-form .form-group select,
+.sheet-body.eq-form .form-group textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* 单独再针对 date 兜底，确保各浏览器一致宽度 */
+.sheet-body.eq-form input[type="date"].form-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
 </style>
 </head>
 <body>
