@@ -2131,23 +2131,48 @@ function renderEquityTimeView() {
     const items = groups[y];
     const now = new Date();
 
-    // 拆分：已到期 vs 未到期
-    const passedItems = items.filter(i => new Date(i.date) <= now);
-    const futureItems = items.filter(i => new Date(i.date) > now);
+    // === 先逐批计算分项实际值 + 是否已解锁（基于 vest 匹配而非仅计划日期）===
+    const itemDetails = items.map(item => {
+      // 尝试匹配该批次的 vest 记录（优先 batch 精确匹配，fallback 同年+股数接近）
+      let matchVest = null;
+      const planDateYear = new Date(item.date).getFullYear();
 
-    // === 已解禁：从实际 vests 记录中取该年份的真实数据 ===
-    let vestedShares = 0, vestedAmount = 0;
-    list.forEach(g => {
-      (g.vests || []).forEach(v => {
-        if (new Date(v.date).getFullYear() === parseInt(y)) {
-          vestedShares += (v.shares || 0);
-          vestedAmount += (v.amount || 0);
+      // 策略1：精确 batch 匹配
+      matchVest = (item.grant.vests || []).find(v => v.batch === item.batch) || null;
+      // 策略2：同年+股数接近 fallback（兼容无 batch 的旧数据）
+      if (!matchVest) {
+        const candidates = (item.grant.vests || []).filter(v =>
+          new Date(v.date).getFullYear() === planDateYear &&
+          Math.abs((v.shares || 0) - item.shares) < item.shares * 0.5   // 股数偏差<50%
+        );
+        if (candidates.length > 0) {
+          // 取股数最接近的
+          candidates.sort((a, b) => Math.abs((a.shares||0)-item.shares) - Math.abs((b.shares||0)-item.shares));
+          matchVest = candidates[0];
         }
-      });
+      }
+
+      const isVested = !!matchVest;   // 有匹配 vest = 已解锁（即使计划日期未到）
+      const planPassed = new Date(item.date) <= now;  // 计划日期是否已到
+
+      return {
+        ...item,
+        isVested,
+        planPassed,
+        actualShares: isVested ? (matchVest.shares || item.shares) : item.shares,
+        actualAmount: isVested ? (matchVest.amount || (item.shares * price)) : (item.shares * price),
+        matchVest
+      };
     });
 
-    // === 预计解禁：未到期批次的股数 × 现行股价 ===
-    const expectShares = futureItems.reduce((s, i) => s + i.shares, 0);
+    // === 汇总：从分项实际值累加（与分项同源，保证一致）===
+    const vestedItems = itemDetails.filter(d => d.isVested);
+    const futureItems = itemDetails.filter(d => !d.isVested && d.planPassed === false);  // 未解锁+计划未到
+    const overdueUnlocked = itemDetails.filter(d => !d.isVested && d.planPassed);     // 计划已到但无vest记录
+
+    const vestedShares = vestedItems.reduce((s, d) => s + d.actualShares, 0);
+    const vestedAmount = vestedItems.reduce((s, d) => s + d.actualAmount, 0);
+    const expectShares = futureItems.reduce((s, d) => s + d.shares, 0);
     const expectAmount = expectShares * price;
 
     // 年份聚合卡片：两行汇总（已解禁 + 预计解禁）+ 下面分项明细
@@ -2156,8 +2181,8 @@ function renderEquityTimeView() {
         <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${y}年</div>
         <div style="font-size:13px;color:var(--text-2);">共 ${items.length} 批次</div>
       </div>
-      <!-- 第一行：已解禁（实际数据）-->
-      <div style="display:flex;gap:16px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">
+      <!-- 第一行：已解禁（实际数据，与分项之和一致）-->
+      ${vestedShares > 0 ? `<div style="display:flex;gap:16px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--green);margin-bottom:2px;">已解禁</div>
           <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${Math.round(vestedShares).toLocaleString('zh-CN')} 股</div>
@@ -2166,9 +2191,9 @@ function renderEquityTimeView() {
           <div style="font-size:11px;color:var(--green);margin-bottom:2px;">&nbsp;</div>
           <div style="font-size:17px;font-weight:700;color:var(--green);">¥${fmtMoney(vestedAmount)}</div>
         </div>
-      </div>
+      </div>` : ''}
       <!-- 第二行：预计解禁（现行股价估算）-->
-      ${futureItems.length > 0 ? `<div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:4px;">
+      ${expectShares > 0 ? `<div style="display:flex;gap:16px;padding-bottom:10px;border-bottom:0.5px solid var(--border);margin-bottom:4px;">
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计解禁</div>
           <div style="font-size:17px;font-weight:700;color:var(--text-1,#1d1d1f);">${Math.round(expectShares).toLocaleString('zh-CN')} 股</div>
@@ -2177,33 +2202,21 @@ function renderEquityTimeView() {
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">&nbsp;</div>
           <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(expectAmount)}</div>
         </div>
-      </div>` : '<div style="height:6px;"></div>'}`;
-    // 分项明细：已到期取实际vests记录，未到期取计划值×现行股价
-    items.forEach(item => {
-      const passed = new Date(item.date) <= new Date();
-      // 已到期的批次：从实际解禁记录中查找匹配的vest（同grant+同年）
-      let actualAmount = item.shares * price;   // 默认用现行股价估算
-      let actualShares = item.shares;
-      if (passed) {
-        const vestYear = new Date(item.date).getFullYear();
-        const matchVest = (item.grant.vests || []).find(v =>
-          new Date(v.date).getFullYear() === vestYear &&
-          Math.abs((v.shares || 0) - item.shares) < 1   // 股数匹配（容差1股）
-        );
-        if (matchVest) {
-          actualShares = matchVest.shares || item.shares;
-          actualAmount = matchVest.amount || actualAmount;  // 用实际记录金额
-        }
-      }
-      html += `<div onclick="showEquityDetail('${item.grant.id}')" style="cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--bg);">
-        <span class="project-color" style="background:${item.grant.color};margin-top:6px;flex-shrink:0;"></span>
+      </div>` : ''}`;
+    // 分项明细：基于 itemDetails 渲染（isVested 决定状态和颜色）
+    itemDetails.forEach(d => {
+      const statusColor = d.isVested ? 'var(--green)' : (d.planPassed ? 'var(--orange,#f59e0b)' : 'var(--text-2)');
+      const statusText = d.isVested ? ' 已解禁' : (d.planPassed ? ' 已到期' : '');
+      const valueColor = d.isVested ? 'var(--green)' : 'var(--text-1,#1d1d1f)';
+      html += `<div onclick="showEquityDetail('${d.grant.id}')" style="cursor:pointer;display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--bg);">
+        <span class="project-color" style="background:${d.grant.color};margin-top:6px;flex-shrink:0;"></span>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:2px;">${item.grant.name} · 第${item.batch}批</div>
-          <div style="font-size:13px;color:var(--text-2);">${fmtDate(item.date)} 解禁</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);margin-bottom:2px;">${d.grant.name} · 第${d.batch}批</div>
+          <div style="font-size:13px;color:var(--text-2);">${fmtDate(d.date)} 解禁</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:14px;font-weight:700;color:${passed ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${Math.round(actualShares).toLocaleString('zh-CN')} 股</div>
-          <div style="font-size:12px;color:${passed ? 'var(--green)' : 'var(--text-2)'};">¥${fmtMoney(actualAmount)}${passed ? ' 已解禁' : ''}</div>
+          <div style="font-size:14px;font-weight:700;color:${valueColor};">${Math.round(d.actualShares).toLocaleString('zh-CN')} 股</div>
+          <div style="font-size:12px;color:${statusColor};">¥${fmtMoney(d.actualAmount)}${statusText}</div>
         </div>
       </div>`;
     });
