@@ -1649,11 +1649,22 @@ function switchPage(page) {
 }
 
 // ===== 弹层 =====
-function openSheet(html) {
+// _sheetBack 记录子级弹层（如批次解锁详情）的返回目标，点"返回/取消"时回到上一级弹层而非首页
+let _sheetBack = null; // {type:'equityDetail'|'vestPicker', eqId}
+function openSheet(html, back) {
   document.getElementById('sheet').innerHTML = `<div class="sheet-handle"></div>${html}`;
   document.getElementById('overlay').classList.add('show');
+  _sheetBack = (back && back.type) ? back : null;
 }
-function closeSheet() {
+function closeSheet(goBack) {
+  if (goBack && _sheetBack) {
+    const b = _sheetBack;
+    _sheetBack = null;
+    if (b.type === 'equityDetail') showEquityDetail(b.eqId);
+    else if (b.type === 'vestPicker') showVestBatchPicker(b.eqId);
+    return;
+  }
+  _sheetBack = null;
   document.getElementById('overlay').classList.remove('show');
 }
 function toast(msg) {
@@ -2636,7 +2647,7 @@ function showEquityDetail(eqId) {
         if (p.matched.note) noteText = p.matched.note;
       }
 
-      const clickAction = `onclick="showVestSheet('${eqId}', ${p.batch})"`;
+      const clickAction = `onclick="showVestSheet('${eqId}', ${p.batch}, 'detail')"`;
 
       planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;" ${clickAction}>
         <div style="flex:1;padding-right:10px;">
@@ -2724,7 +2735,7 @@ function showVestBatchPicker(eqId) {
       const statusColor = p.matched ? 'var(--green)' : (p.passed ? 'var(--orange,#f59e0b)' : 'var(--text-3)');
       const displayDate = p.matched ? fmtDateFull(p.matched.date) : fmtDateFull(p.date);
       const check = p.matched ? '✓' : '';
-      items += `<div onclick="showVestSheet('${eqId}', ${p.batch})" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:8px;cursor:pointer;">
+      items += `<div onclick="showVestSheet('${eqId}', ${p.batch}, 'picker')" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:8px;cursor:pointer;">
         <span style="font-size:14px;font-weight:700;color:var(--primary);width:52px;flex-shrink:0;">第${p.batch}批</span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:12px;color:var(--text-3);">${displayDate}</div>
@@ -2746,8 +2757,32 @@ function showVestBatchPicker(eqId) {
   `);
 }
 
+// 查找某批次对应的解锁记录：优先精确 batch，否则按股数/日期综合评分匹配（兼容游离记录，无硬性天数限制）
+// 批次表单 showVestSheet 与删除 deleteVestBatch 共用此逻辑，保证"能显示删除按钮就一定能删掉"
+function findVestForBatch(g, batch) {
+  const vests = g.vests || [];
+  const exact = vests.find(v => v.batch === batch);
+  if (exact) return exact;
+  if (!vests.length) return null;
+  const plan = computeVestPlan(g);
+  const planBatch = plan.find(p => p.batch === batch);
+  if (!planBatch) return null;
+  const pd = new Date(planBatch.date);
+  const perShare = planBatch.shares;
+  const usedIds = new Set(vests.filter(v => v.batch != null).map(v => v.id));
+  let best = null, bestScore = Infinity;
+  vests.forEach(v => {
+    if (usedIds.has(v.id)) return;   // 已被其他批次占用
+    const shareDiff = Math.abs((v.shares||0) - perShare);
+    const dayDiff = Math.abs((new Date(v.date) - pd) / 86400000);
+    const score = shareDiff * 10 + dayDiff;   // 股数差异权重更高
+    if (score < bestScore) { best = v; bestScore = score; }
+  });
+  return (best && bestScore < perShare * 5) ? best : null;   // 股数差异不超过50%即合理匹配
+}
+
 // 记/编辑解锁：batch 指定批次时，直接挂到解禁计划的对应批次上（不再单独加一笔）
-function showVestSheet(eqId, batch) {
+function showVestSheet(eqId, batch, from) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
   const now = new Date();
@@ -2755,32 +2790,8 @@ function showVestSheet(eqId, batch) {
   const remain = getEquityRemaining(g);
 
   // 批次模式：查找该批次已有的解锁记录（预填）
-  // 匹配策略与详情页解禁计划渲染一致：精确batch → 股数接近+日期fallback
   let existing = null;
-  if (batch) {
-    existing = (g.vests || []).find(v => v.batch === batch) || null;
-    if (!existing && (g.vests||[]).length > 0) {
-      const plan = computeVestPlan(g);
-      const planBatch = plan.find(p => p.batch === batch);
-      if (planBatch) {
-        const pd = new Date(planBatch.date);
-        const perShare = planBatch.shares;
-        // 找股数最接近且未被占用的 vest（无硬性天数限制，兼容各种时间偏差）
-        const usedIds = new Set((g.vests||[]).filter(v=>v.batch!=null).map(v=>v.id));
-        let best = null, bestScore = Infinity;
-        (g.vests||[]).forEach(v => {
-          if (usedIds.has(v.id)) return;   // 已被其他批次占用
-          const shareDiff = Math.abs((v.shares||0) - perShare);
-          const dayDiff = Math.abs((new Date(v.date) - pd) / 86400000);
-          // 综合评分：股数差异权重更高
-          const score = shareDiff * 10 + dayDiff;
-          if (score < bestScore) { best = v; bestScore = score; }
-        });
-        // 只要股数差异不超过50%就算合理匹配
-        if (best && bestScore < perShare * 5) existing = best;
-      }
-    }
-  }
+  if (batch) existing = findVestForBatch(g, batch);
   // 预填日期（existing 存在时取实际解锁时间），统一用本地时区折算，避免字符串减数字产生 NaN
   const exLocal = existing
     ? new Date(new Date(existing.date).getTime() - new Date(existing.date).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
@@ -2789,6 +2800,9 @@ function showVestSheet(eqId, batch) {
   const sub = batch
     ? `计划 ${Math.round((Number(g.totalShares)||0) / (parseInt(g.vestBatches)||1)).toLocaleString('zh-CN')} 股 · 填写实际解锁信息`
     : `当前剩余 <b style="color:var(--primary)">${Math.round(remain.shares).toLocaleString('zh-CN')}</b> 股（授予 ${Math.round(g.totalShares).toLocaleString('zh-CN')} 股）`;
+
+  // 返回目标：从详情页进入则回到详情页，从批次选择器进入则回到选择器
+  const backTarget = from === 'picker' ? { type: 'vestPicker', eqId } : { type: 'equityDetail', eqId };
 
   openSheet(`
     <div class="sheet-title">${title}</div>
@@ -2814,9 +2828,9 @@ function showVestSheet(eqId, batch) {
     <div class="sheet-actions">
       <button class="btn-primary" onclick="saveVest('${eqId}', ${batch ? batch : 'null'})">保存</button>
       ${existing ? `<button class="btn-danger" onclick="deleteVestBatch('${eqId}', ${batch ? batch : 'null'})">删除</button>` : ''}
-      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+      <button class="btn-secondary" onclick="closeSheet(true)">返回</button>
     </div>
-  `);
+  `, backTarget);
 }
 
 // 保存解锁：按批次精确 upsert（同批次只保留一条），避免重复加一笔
@@ -2911,13 +2925,18 @@ function deleteVest(eqId, vid) {
   toast('解禁记录已删除');
 }
 
-// 按批次删除解锁记录（批次记录可能没有 id，需按 batch 定位）
+// 按批次删除解锁记录（与批次表单 showVestSheet 同一匹配逻辑，确保能删掉游离记录并正确更新进度）
 function deleteVestBatch(eqId, batch) {
   if (!batch) return;
   if (!confirm('确定删除第' + batch + '批的解锁记录吗？删除后不可恢复。')) return;
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
-  g.vests = (g.vests || []).filter(v => v.batch !== batch);
+  const vests = g.vests || [];
+  const target = findVestForBatch(g, batch);
+  if (!target) { toast('未找到该批次的解锁记录'); return; }
+  // 游离记录有 id 按 id 删；批次记录无 id 按 batch 删
+  if (target.id) g.vests = vests.filter(v => v.id !== target.id);
+  else g.vests = vests.filter(v => v.batch !== batch);
   saveData();
   closeSheet();
   render();
@@ -3024,8 +3043,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=9 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v9
-    navigator.serviceWorker.register('./sw.js?v=9').then((reg) => {
+    // 用 ?v=10 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v10
+    navigator.serviceWorker.register('./sw.js?v=10').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
