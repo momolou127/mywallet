@@ -110,6 +110,8 @@ body {
   transition: transform 0.15s;
 }
 .icon-btn:active { transform: scale(0.9); }
+/* 暂时不需要的功能按钮：隐藏但保留代码，便于日后恢复 */
+.hidden-btn { display: none !important; }
 
 /* 总览卡 */
 .total-card {
@@ -884,8 +886,8 @@ body {
   <div class="header-top">
     <div class="app-title">我的钱包</div>
     <div class="header-actions">
-      <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" title="切换深浅色">🌙</button>
-      <button class="icon-btn" onclick="showSearchSheet()" title="搜索记录">🔍</button>
+      <button class="icon-btn hidden-btn" id="themeToggle" onclick="toggleTheme()" title="切换深浅色">🌙</button>
+      <button class="icon-btn hidden-btn" onclick="showSearchSheet()" title="搜索记录">🔍</button>
       <button class="icon-btn" id="amountToggle" onclick="toggleAmountVisibility()" title="隐藏/显示金额"></button>
       <button class="icon-btn" onclick="exportData()" title="导出备份">↓</button>
       <button class="icon-btn" onclick="importData()" title="导入备份">↑</button>
@@ -1666,7 +1668,10 @@ let amountHidden = localStorage.getItem('dw_hide') === '1';
 function applyAmountToggle() {
   const b = document.getElementById('amountToggle');
   if (b) {
-    b.textContent = amountHidden ? '🙈' : '👁';
+    // 眼睛图标：显示状态=睁眼，隐藏状态=闭眼带斜杠
+    b.innerHTML = amountHidden
+      ? '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
     b.title = amountHidden ? '点击显示金额' : '点击隐藏金额';
   }
   document.body.classList.toggle('amount-hidden', amountHidden);
@@ -2949,8 +2954,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=7 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v7
-    navigator.serviceWorker.register('./sw.js?v=7').then((reg) => {
+    // 用 ?v=8 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v8
+    navigator.serviceWorker.register('./sw.js?v=8').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
