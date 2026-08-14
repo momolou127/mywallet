@@ -2299,7 +2299,6 @@ function renderEquity() {
     const pct = total > 0 ? Math.min(100, vestedShares / total * 100) : 0;
     const remainVal = price * remainShares;
 
-    const firstBatch = (matchedPlan.find(m => !m.matched) || {}).batch || null;
     // 与"按解禁时间"视图一致的年份聚合卡片风格：顶部标题 + 两列汇总 + 底部详情
     html += `<div class="project-card" onclick="showEquityDetail('${g.id}')" style="padding:16px;cursor:pointer;">
       <!-- 标题行 -->
@@ -2309,7 +2308,7 @@ function renderEquity() {
           <span style="font-size:16px;font-weight:700;color:var(--text-1,#1d1d1f);">${g.name}</span>
         </div>
         <div style="display:flex;gap:6px;" onclick="event.stopPropagation()">
-          <button class="mini-btn" onclick="showVestSheet('${g.id}', ${firstBatch})" title="记解锁">＋</button>
+          <button class="mini-btn" onclick="showVestBatchPicker('${g.id}')" title="记一笔解锁">＋</button>
           <button class="mini-btn" onclick="showEquityDetail('${g.id}')" title="详情">›</button>
         </div>
       </div>
@@ -2691,6 +2690,62 @@ function showEquityDetail(eqId) {
   `);
 }
 
+// 记解锁批次选择面板：让用户明确选择要记录解锁的批次，避免游离记录挂不上计划
+function showVestBatchPicker(eqId) {
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  const plan = computeVestPlan(g);
+  const vests = g.vests || [];
+  const batchVests = vests.filter(v => v.batch != null);
+  const looseVests = vests.filter(v => v.batch == null);
+  const looseMatched = new Set();
+  const planMatched = plan.map(p => {
+    const passed = new Date(p.date) <= new Date();
+    const exact = batchVests.find(v => v.batch === p.batch);
+    let matched = exact;
+    if (!matched && passed && looseVests.length) {
+      let best = null, bestDiff = Infinity;
+      looseVests.forEach(v => {
+        if (looseMatched.has(v.id)) return;
+        const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
+        if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
+      });
+      if (best) { looseMatched.add(best.id); matched = best; }
+    }
+    return { ...p, passed, matched };
+  });
+
+  let items = '';
+  if (!plan.length) {
+    items = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:20px 0;">该授予未设置解禁计划，无法按批次记录</div>`;
+  } else {
+    planMatched.forEach(p => {
+      const status = p.matched ? '已解锁' : (p.passed ? '已到期' : '未解锁');
+      const statusColor = p.matched ? 'var(--green)' : (p.passed ? 'var(--orange,#f59e0b)' : 'var(--text-3)');
+      const displayDate = p.matched ? fmtDateFull(p.matched.date) : fmtDateFull(p.date);
+      const check = p.matched ? '✓' : '';
+      items += `<div onclick="showVestSheet('${eqId}', ${p.batch})" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:8px;cursor:pointer;">
+        <span style="font-size:14px;font-weight:700;color:var(--primary);width:52px;flex-shrink:0;">第${p.batch}批</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:var(--text-3);">${displayDate}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);margin-top:1px;">${Math.round(p.shares).toLocaleString('zh-CN')} 股</div>
+        </div>
+        <span style="font-size:12px;color:${statusColor};white-space:nowrap;flex-shrink:0;">${check} ${status}</span>
+      </div>`;
+    });
+  }
+  openSheet(`
+    <div class="sheet-title">选择记录批次</div>
+    <div class="sheet-body">
+      <div style="background:var(--bg);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--text-2);margin-bottom:12px;">${g.name} · 共 ${plan.length} 批。点击某一批，为该批填写实际解锁信息。</div>
+      ${items}
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+
 // 记/编辑解锁：batch 指定批次时，直接挂到解禁计划的对应批次上（不再单独加一笔）
 function showVestSheet(eqId, batch) {
   const g = (state.equity || []).find(x => x.id === eqId);
@@ -2758,6 +2813,7 @@ function showVestSheet(eqId, batch) {
     </div>
     <div class="sheet-actions">
       <button class="btn-primary" onclick="saveVest('${eqId}', ${batch ? batch : 'null'})">保存</button>
+      ${existing ? `<button class="btn-danger" onclick="deleteVestBatch('${eqId}', ${batch ? batch : 'null'})">删除</button>` : ''}
       <button class="btn-secondary" onclick="closeSheet()">取消</button>
     </div>
   `);
@@ -2853,6 +2909,20 @@ function deleteVest(eqId, vid) {
   render();
   showEquityDetail(eqId);
   toast('解禁记录已删除');
+}
+
+// 按批次删除解锁记录（批次记录可能没有 id，需按 batch 定位）
+function deleteVestBatch(eqId, batch) {
+  if (!batch) return;
+  if (!confirm('确定删除第' + batch + '批的解锁记录吗？删除后不可恢复。')) return;
+  const g = (state.equity || []).find(x => x.id === eqId);
+  if (!g) return;
+  g.vests = (g.vests || []).filter(v => v.batch !== batch);
+  saveData();
+  closeSheet();
+  render();
+  showEquityDetail(eqId);
+  toast('第' + batch + '批解锁记录已删除');
 }
 
 function showEditEquitySheet(eqId) {
@@ -2954,8 +3024,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=8 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v8
-    navigator.serviceWorker.register('./sw.js?v=8').then((reg) => {
+    // 用 ?v=9 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v9
+    navigator.serviceWorker.register('./sw.js?v=9').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
