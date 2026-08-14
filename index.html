@@ -19,15 +19,43 @@
   --primary-light: #818cf8;
   --primary-bg: #eef2ff;
   --text: #1d1d1f;
+  --text-1: #1d1d1f;
   --text-2: #6e6e73;
   --text-3: #aeaeb2;
   --border: #e5e5ea;
   --green: #34c759;
   --red: #ff3b30;
   --orange: #ff9500;
+  --nav-bg: rgba(255,255,255,0.92);
+  --chart-grid: #f0f0f0;
+  --chart-text: #aeaeb2;
+  --chart-base: #cfcfcf;
   --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-lg: 0 10px 30px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
   --radius: 16px;
+}
+
+/* 深色模式 */
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --card: #1a1d24;
+  --primary: #818cf8;
+  --primary-light: #a5b4fc;
+  --primary-bg: #1e1b4b;
+  --text: #f2f3f5;
+  --text-1: #f2f3f5;
+  --text-2: #9aa0a6;
+  --text-3: #6e747b;
+  --border: #2a2e37;
+  --green: #4ade80;
+  --red: #f87171;
+  --orange: #fbbf24;
+  --nav-bg: rgba(26,29,36,0.92);
+  --chart-grid: #2a2e37;
+  --chart-text: #6e747b;
+  --chart-base: #4a4f57;
+  --shadow: 0 1px 3px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.55), 0 4px 12px rgba(0,0,0,0.4);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -358,7 +386,7 @@ body {
   transform: translateX(-50%);
   width: 100%;
   max-width: 430px;
-  background: rgba(255,255,255,0.92);
+  background: var(--nav-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 0.5px solid var(--border);
@@ -376,7 +404,7 @@ body {
   align-items: center;
   justify-content: center;   /* 垂直居中 */
   gap: 2px;
-  color: #b0b0b6;          /* 非选中：更浅的灰色 */
+  color: var(--text-3);        /* 非选中：更浅的灰色 */
   font-size: 10px;         /* 非选中：稍小字号 */
   cursor: pointer;
   padding: 6px 0;
@@ -703,6 +731,9 @@ body {
 }
 .summary-box-value.green { color: var(--green); }
 .summary-box-value.red { color: var(--red); }
+.summary-box-meta { font-size: 12px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.summary-box-meta.green { color: var(--green); }
+.summary-box-meta.red { color: var(--red); }
 
 /* 总目标横幅 */
 .goal-banner {
@@ -831,6 +862,9 @@ body {
   <div class="header-top">
     <div class="app-title">我的钱包</div>
     <div class="header-actions">
+      <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" title="切换深浅色">🌙</button>
+      <button class="icon-btn" onclick="showSearchSheet()" title="搜索记录">🔍</button>
+      <button class="icon-btn" onclick="showSettingsSheet()" title="设置">⚙</button>
       <button class="icon-btn" onclick="exportData()" title="导出备份">↓</button>
       <button class="icon-btn" onclick="importData()" title="导入备份">↑</button>
       <button class="icon-btn" onclick="onHeaderAddClick()" title="新增">＋</button>
@@ -839,7 +873,7 @@ body {
   </div>
   <div class="total-card">
     <div class="total-label">总存款</div>
-    <div class="total-amount"><span class="currency">¥</span><span id="totalAmount">0</span></div>
+    <div class="total-amount"><span class="currency" id="totalCurrency">¥</span><span id="totalAmount">0</span></div>
     <div class="total-meta">
       <span id="totalChange">—</span>
       <span id="totalDate">—</span>
@@ -890,12 +924,40 @@ let state = {
   snapshotDate: null,
   equity: [],   // 股权激励：[{id,name,color,totalAmount,grantPrice,totalShares,grantDate,vestYears,vestBatches,vestStartYear,createdAt,vests:[{id,date,amount,shares,note}]}]
   equityView: 'project',  // 'project' 按项目查看 / 'time' 按解禁时间查看
-  currentPrice: 19       // 现行股价（用于估算股权预计金额），默认19，可修改
+  currentPrice: 19,       // 现行股价（用于估算股权预计金额），默认19，可修改
+  currency: '¥',          // 显示币种符号（默认人民币）
 };
 
 // 获取现行股价（兼容旧数据：空/0 时回退默认19）
 function getCurrentPrice() {
   return Number(state.currentPrice) > 0 ? Number(state.currentPrice) : 19;
+}
+
+// 支持的币种符号（key 用于持久化校验）
+const VALID_CURRENCIES = { '¥': '人民币 ¥', '$': '美元 $', '€': '欧元 €', '£': '英镑 £', '₩': '韩元 ₩', '฿': '泰铢 ฿', '₹': '印度卢比 ₹', '元': '自定义 元' };
+function CUR() { return state.currency || '¥'; }
+
+// ===== 主题（深色/浅色）=====
+let theme = localStorage.getItem('dw_theme') ||
+  (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  const tb = document.getElementById('themeToggle');
+  if (tb) tb.textContent = theme === 'dark' ? '☀️' : '🌙';
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'dark' ? '#0f1115' : '#6366f1');
+}
+function toggleTheme() {
+  theme = theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('dw_theme', theme);
+  applyTheme();
+  render();
+  toast(theme === 'dark' ? '已切换到深色模式' : '已切换到浅色模式');
+}
+// 读取当前主题下的 CSS 变量（供 SVG 图表配色使用）
+function cssVar(name, fallback) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 let currentPage = 'home';
 
@@ -909,6 +971,7 @@ function loadData() {
       state.goal = data.goal || 0;
       state.equity = Array.isArray(data.equity) ? data.equity : [];
       state.currentPrice = Number(data.currentPrice) > 0 ? Number(data.currentPrice) : 19;
+      state.currency = VALID_CURRENCIES[data.currency] ? data.currency : '¥';
       // 如果存储的数据是空的（被清空过），重新生成演示数据
       if (state.projects.length === 0 && state.records.length === 0 && (state.equity||[]).length === 0) {
         seedDemo();
@@ -925,7 +988,8 @@ function saveData() {
     records: state.records,
     goal: state.goal || 0,
     equity: state.equity,
-    currentPrice: state.currentPrice || 19
+    currentPrice: state.currentPrice || 19,
+    currency: state.currency || '¥'
   }));
 }
 
@@ -1026,21 +1090,30 @@ function getTotalLatest() {
   return { total, latestDate, prevTotal: hasPrev ? prevTotal : null };
 }
 
-// 计算年初（当年最早一条记录）各项目的总额，用于"较年初"对比
-function getYearStartTotal() {
-  const now = new Date();
-  const year = now.getFullYear();
+// 计算截止某日期（含当天）的总存款快照；项目在该日期尚未有记录则按 0 计
+function getTotalAtDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  const cutoff = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59).getTime();
   let total = 0;
-  let hasData = false;
+  let has = false;
   state.projects.forEach(p => {
-    // 找该项目当年的第一条记录（最接近年初）
-    const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getFullYear() === year);
-    if (recs.length > 0) {
-      total += recs[0].amount; // 当年第一条就是年初基准
-      hasData = true;
-    }
+    const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getTime() <= cutoff);
+    if (recs.length) { total += recs[recs.length - 1].amount; has = true; }
   });
-  return hasData ? total : null;
+  return has ? total : null;
+}
+
+// 上个月最后一天（YYYY-MM-DD）
+function getLastMonthEndStr() {
+  const now = new Date();
+  const lastOfPrev = new Date(now.getFullYear(), now.getMonth(), 0); // 本月第0天 = 上月末
+  return `${lastOfPrev.getFullYear()}-${String(lastOfPrev.getMonth() + 1).padStart(2, '0')}-${String(lastOfPrev.getDate()).padStart(2, '0')}`;
+}
+// 今年 1 月 1 日（YYYY-MM-DD）
+function getYearStartStr() {
+  const now = new Date();
+  return `${now.getFullYear()}-01-01`;
 }
 
 // ===== 渲染 =====
@@ -1085,15 +1158,17 @@ function renderPage() {
 function renderTotal() {
   const { total, latestDate, prevTotal } = getTotalLatest();
   document.getElementById('totalAmount').textContent = fmtMoney(total);
+  const curEl = document.getElementById('totalCurrency');
+  if (curEl) curEl.textContent = CUR();
   const changeEl = document.getElementById('totalChange');
   const dateEl = document.getElementById('totalDate');
   if (prevTotal !== null) {
     const diff = total - prevTotal;
     const pct = prevTotal ? (diff / prevTotal * 100).toFixed(1) : 0;
     if (diff > 0) {
-      changeEl.innerHTML = `<span class="change-up">↑ ¥${fmtMoney(diff)} (+${pct}%)</span>`;
+      changeEl.innerHTML = `<span class="change-up">↑ ${CUR()}${fmtMoney(diff)} (+${pct}%)</span>`;
     } else if (diff < 0) {
-      changeEl.innerHTML = `<span class="change-down">↓ ¥${fmtMoney(Math.abs(diff))} (${pct}%)</span>`;
+      changeEl.innerHTML = `<span class="change-down">↓ ${CUR()}${fmtMoney(Math.abs(diff))} (${pct}%)</span>`;
     } else {
       changeEl.innerHTML = `<span>持平</span>`;
     }
@@ -1125,8 +1200,8 @@ function renderHome() {
     if (latest && prev) {
       const diff = latest.amount - prev.amount;
       const pct = prev.amount ? (diff/prev.amount*100).toFixed(1) : 0;
-      if (diff > 0) changeHtml = `<div class="project-change up">↑ ¥${fmtMoney(diff)} (+${pct}%)</div>`;
-      else if (diff < 0) changeHtml = `<div class="project-change down">↓ ¥${fmtMoney(Math.abs(diff))} (${pct}%)</div>`;
+      if (diff > 0) changeHtml = `<div class="project-change up">↑ ${CUR()}${fmtMoney(diff)} (+${pct}%)</div>`;
+      else if (diff < 0) changeHtml = `<div class="project-change down">↓ ${CUR()}${fmtMoney(Math.abs(diff))} (${pct}%)</div>`;
       else changeHtml = `<div class="project-change flat">— 持平</div>`;
     } else if (latest) {
       changeHtml = `<div class="project-change flat">初始记录</div>`;
@@ -1137,7 +1212,7 @@ function renderHome() {
       <div class="project-header">
         <div class="project-info">
           <div class="project-name"><span class="project-color" style="background:${p.color}"></span>${p.name}</div>
-          <div class="project-latest">¥${fmtMoney(latestAmount)}</div>
+          <div class="project-latest">${CUR()}${fmtMoney(latestAmount)}</div>
           ${changeHtml}
         </div>
         <div class="project-actions" onclick="event.stopPropagation()">
@@ -1195,7 +1270,7 @@ function renderSnapshot() {
   // 合计卡
   html += `<div class="snapshot-summary">
     <div class="sl">${summaryTitle}</div>
-    <div class="sa"><span class="currency">¥</span>${fmtMoney(snapTotal)}</div>
+    <div class="sa"><span class="currency">${CUR()}</span>${fmtMoney(snapTotal)}</div>
     <div class="sd">${dayHasAny ? '该日及之前最后一次记录合计' : '该日期暂无记录'}</div>
   </div>`;
 
@@ -1212,7 +1287,7 @@ function renderSnapshot() {
   // 各项目快照
   items.forEach(item => {
     const hasRec = item.record !== null;
-    const amountTxt = hasRec ? `¥${fmtMoney(item.amount)}` : '暂无记录';
+    const amountTxt = hasRec ? `${CUR()}${fmtMoney(item.amount)}` : '暂无记录';
     const noteTxt = hasRec && item.record.note ? `<div class="project-change flat">备注：${item.record.note}</div>` : '';
     html += `<div class="project-card" onclick="${hasRec ? `editRecord('${item.record.id}')` : ''}">
       <div class="project-header">
@@ -1249,11 +1324,11 @@ function renderGoalBanner() {
   const done = remain <= 0;
   el.innerHTML = `<div class="goal-banner-inner" onclick="showSetGoalSheet()">
     <div class="goal-banner-top">
-      <span>总目标 ¥${fmtMoney(state.goal)}</span>
+      <span>总目标 ${CUR()}${fmtMoney(state.goal)}</span>
       <span class="pct">${pct.toFixed(1)}%</span>
     </div>
     <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
-    <div class="goal-banner-bottom ${done ? 'done' : ''}">${done ? '🎉 已达成总存款目标！' : '还差 ¥' + fmtMoney(remain) + ' 达成'}</div>
+    <div class="goal-banner-bottom ${done ? 'done' : ''}">${done ? '🎉 已达成总存款目标！' : '还差 ' + CUR() + fmtMoney(remain) + ' 达成'}</div>
   </div>`;
 }
 
@@ -1312,21 +1387,36 @@ function renderStats() {
   });
   const grandTotal = totals.reduce((s,t) => s + t.amount, 0);
 
-  // 总体环比（较上次/较月初）
-  const { prevTotal } = getTotalLatest();
+  // 较上月：本月总额相比上月末总额
+  const prevTotal = getTotalAtDate(getLastMonthEndStr());
   let totalDiff = 0, totalPct = 0;
   if (prevTotal !== null && prevTotal > 0) {
     totalDiff = grandTotal - prevTotal;
-    totalPct = totalDiff / prevTotal * 100;
+    totalPct = prevTotal ? totalDiff / prevTotal * 100 : 0;
   }
 
-  // 较年初对比
-  const yearStartTotal = getYearStartTotal();
+  // 较年初：本月总额相比今年 1 月 1 日总额
+  const yearStartTotal = getTotalAtDate(getYearStartStr());
   let yearDiff = 0, yearPct = 0;
   if (yearStartTotal !== null && yearStartTotal > 0) {
     yearDiff = grandTotal - yearStartTotal;
-    yearPct = yearDiff / yearStartTotal * 100;
+    yearPct = yearStartTotal ? yearDiff / yearStartTotal * 100 : 0;
   }
+
+  // 较上次记账：相对最近一次记账的变动（补充维度）
+  const { prevTotal: prevRecTotal } = getTotalLatest();
+  let recDiff = 0, recPct = 0;
+  if (prevRecTotal !== null && prevRecTotal > 0) {
+    recDiff = grandTotal - prevRecTotal;
+    recPct = prevRecTotal ? recDiff / prevRecTotal * 100 : 0;
+  }
+
+  // 基准期标签（用于标题说明）
+  const nowD = new Date();
+  const lastMonthMB = new Date(nowD.getFullYear(), nowD.getMonth(), 0); // 上月末，用于取月份
+  const lastMonthLabel = `${lastMonthMB.getFullYear()}年${lastMonthMB.getMonth() + 1}月`;
+  const yearLabel = `${nowD.getFullYear()}年`;
+  const monthStartLabel = `${nowD.getFullYear()}年${nowD.getMonth() + 1}月`;
 
   // 总目标进度卡（始终显示，点击卡片即可设置/修改，不再单独一行按钮）
   const { total: goalTotal } = getTotalLatest();
@@ -1338,11 +1428,11 @@ function renderStats() {
     goalCard = `<div class="chart-card goal-card" style="margin-bottom:12px;cursor:pointer;" onclick="showSetGoalSheet()">
       <div class="chart-title">总目标进度</div>
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:8px;">
-        <span>目标 ¥${fmtMoney(state.goal)}</span>
+        <span>目标 ${CUR()}${fmtMoney(state.goal)}</span>
         <span style="font-weight:700;color:var(--primary)">${pct.toFixed(1)}%</span>
       </div>
       <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
-      <div style="font-size:12px;color:${done?'var(--green)':'var(--text-3)'};margin-top:8px;${done?'font-weight:600':''}">${done?'🎉 已达成总存款目标！':'还差 ¥'+fmtMoney(remain)+' 达成'} · 点击修改</div>
+      <div style="font-size:12px;color:${done?'var(--green)':'var(--text-3)'};margin-top:8px;${done?'font-weight:600':''}">${done?'🎉 已达成总存款目标！':'还差 '+CUR()+fmtMoney(remain)+' 达成'} · 点击修改</div>
     </div>`;
   } else {
     goalCard = `<div class="chart-card goal-card" style="margin-bottom:12px;cursor:pointer;text-align:center;color:var(--primary);" onclick="showSetGoalSheet()">
@@ -1356,25 +1446,25 @@ function renderStats() {
     <div class="summary-row">
       <div class="summary-box" style="flex:1.4;">
         <div class="summary-box-label">当前总额</div>
-        <div class="summary-box-value">¥${fmtMoney(grandTotal)}</div>
+        <div class="summary-box-value">${CUR()}${fmtMoney(grandTotal)}</div>
+        <div class="summary-box-meta">截至 ${monthStartLabel}</div>
       </div>
       <div class="summary-box">
-        <div class="summary-box-label">较上月</div>
-        <div class="summary-box-value ${totalDiff>0?'green':totalDiff<0?'red':''}">${totalDiff>0?'↑':totalDiff<0?'↓':'—'} ${totalDiff!==0?'¥'+fmtMoney(Math.abs(totalDiff)):'—'}</div>
+        <div class="summary-box-label" style="line-height:1.3;">较上月<br><span style="color:var(--text-3);font-weight:400;">${lastMonthLabel}末</span></div>
+        <div class="summary-box-value ${totalDiff>0?'green':totalDiff<0?'red':''}" style="font-size:16px;">${totalDiff>0?'↑':totalDiff<0?'↓':'—'} ${totalDiff!==0?CUR()+fmtMoney(Math.abs(totalDiff)):'—'}</div>
+        <div class="summary-box-meta ${totalPct>0?'green':totalPct<0?'red':''}">${totalPct>0?'+':''}${totalPct.toFixed(1)}%</div>
       </div>
     </div>
     <div class="summary-row">
       <div class="summary-box">
-        <div class="summary-box-label">较上月</div>
-        <div class="summary-box-value ${totalPct>0?'green':totalPct<0?'red':''}">${totalPct>0?'+':''}${totalPct.toFixed(1)}%</div>
+        <div class="summary-box-label" style="line-height:1.3;">较年初<br><span style="color:var(--text-3);font-weight:400;">${yearLabel}1月1日</span></div>
+        <div class="summary-box-value ${yearDiff>0?'green':yearDiff<0?'red':''}" style="font-size:16px;">${yearStartTotal !== null ? (yearDiff>0?'↑':yearDiff<0?'↓':'—') + ' ' + (yearDiff!==0?CUR()+fmtMoney(Math.abs(yearDiff)):'—') : '—'}</div>
+        <div class="summary-box-meta ${yearPct>0?'green':yearPct<0?'red':''}">${yearStartTotal !== null ? (yearPct>0?'+':'') + yearPct.toFixed(1) + '%' : '无数据'}</div>
       </div>
       <div class="summary-box">
-        <div class="summary-box-label">较年初</div>
-        <div class="summary-box-value ${yearDiff>0?'green':yearDiff<0?'red':''}" style="font-size:13px;line-height:1.3;">
-          ${yearStartTotal !== null
-            ? `<span>${yearPct>0?'+':''}${yearPct.toFixed(1)}%</span><br><span style="font-weight:600;">${yearDiff>0?'↑':yearDiff<0?'↓':'—'} ${yearDiff!==0?'¥'+fmtMoney(Math.abs(yearDiff)):'—'}</span>`
-            : '—'}
-        </div>
+        <div class="summary-box-label" style="line-height:1.3;">较上次记账<br><span style="color:var(--text-3);font-weight:400;">最近一次记录</span></div>
+        <div class="summary-box-value ${recDiff>0?'green':recDiff<0?'red':''}" style="font-size:16px;">${recDiff>0?'↑':recDiff<0?'↓':'—'} ${recDiff!==0?CUR()+fmtMoney(Math.abs(recDiff)):'—'}</div>
+        <div class="summary-box-meta ${recPct>0?'green':recPct<0?'red':''}">${recPct>0?'+':''}${recPct.toFixed(1)}%</div>
       </div>
     </div>
   `;
@@ -1404,8 +1494,8 @@ function renderStats() {
     let diffCls = '';
     if (latest && prev) {
       const d = latest.amount - prev.amount;
-      if (d > 0) { diffTxt = `↑¥${fmtMoney(d)}`; diffCls = 'green'; }
-      else if (d < 0) { diffTxt = `↓¥${fmtMoney(Math.abs(d))}`; diffCls = 'red'; }
+      if (d > 0) { diffTxt = `↑${CUR()}${fmtMoney(d)}`; diffCls = 'green'; }
+      else if (d < 0) { diffTxt = `↓${CUR()}${fmtMoney(Math.abs(d))}`; diffCls = 'red'; }
       else diffTxt = '持平';
     }
     html += `<div class="list-item" onclick="showProjectDetail('${t.project.id}')">
@@ -1414,7 +1504,7 @@ function renderStats() {
         <div class="list-item-sub">${recs.length}条记录 · 占比${pct.toFixed(1)}%</div>
       </div>
       <div>
-        <div class="list-item-value">¥${fmtMoney(t.amount)}</div>
+        <div class="list-item-value">${CUR()}${fmtMoney(t.amount)}</div>
         <div class="list-item-meta ${diffCls}">${diffTxt}</div>
       </div>
     </div>`;
@@ -1449,6 +1539,9 @@ function drawTrendChart() {
 
   // 限制最近30个点
   const showPoints = points.slice(-30);
+  const grid = cssVar('--chart-grid', '#f0f0f0');
+  const txtC = cssVar('--chart-text', '#aeaeb2');
+  const baseC = cssVar('--chart-base', '#cfcfcf');
   const w = 350, h = 180, pad = { l: 42, r: 10, t: 16, b: 28 };
   const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
   const max = Math.max(...showPoints.map(p => p.total), 0);
@@ -1463,11 +1556,11 @@ function drawTrendChart() {
   const yLabels = [max, (max + min) / 2, min];
   yLabels.forEach(v => {
     const y = pad.t + ch - (v - min) / range * ch;
-    svg += `<line x1="${pad.l}" y1="${y}" x2="${w-pad.r}" y2="${y}" stroke="#f0f0f0" stroke-width="1"/>`;
-    svg += `<text x="${pad.l-5}" y="${y+3}" font-size="9" fill="#aeaeb2" text-anchor="end">¥${v>=10000?(v/10000).toFixed(1)+'万':Math.round(v)}</text>`;
+    svg += `<line x1="${pad.l}" y1="${y}" x2="${w-pad.r}" y2="${y}" stroke="${grid}" stroke-width="1"/>`;
+    svg += `<text x="${pad.l-5}" y="${y+3}" font-size="9" fill="${txtC}" text-anchor="end">${CUR()}${v>=10000?(v/10000).toFixed(1)+'万':Math.round(v)}</text>`;
   });
   // 0 基线
-  svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="#cfcfcf" stroke-width="1"/>`;
+  svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="${baseC}" stroke-width="1"/>`;
   // 柱体
   showPoints.forEach((p, i) => {
     const x = pad.l + i * xStep;
@@ -1483,7 +1576,7 @@ function drawTrendChart() {
   for (let i = 0; i < labelCount; i++) {
     const idx = labelCount === 1 ? 0 : Math.floor(i * (showPoints.length-1) / (labelCount-1));
     const x = pad.l + idx * xStep;
-    svg += `<text x="${x}" y="${h-8}" font-size="9" fill="#aeaeb2" text-anchor="middle">${fmtDate(showPoints[idx].date)}</text>`;
+    svg += `<text x="${x}" y="${h-8}" font-size="9" fill="${txtC}" text-anchor="middle">${fmtDate(showPoints[idx].date)}</text>`;
   }
   svg += `</svg>`;
   container.innerHTML = svg;
@@ -1493,6 +1586,8 @@ function drawPieChart(totals, grandTotal) {
   const container = document.getElementById('pieChart');
   if (!container || grandTotal === 0) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
 
+  const t1 = cssVar('--text-1', '#1d1d1f');
+  const txt2 = cssVar('--text-3', '#aeaeb2');
   const w = 320, h = 200, cx = 92, cy = 100, r = 80;
   let angle = -Math.PI / 2;
   let svg = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg">`;
@@ -1513,13 +1608,13 @@ function drawPieChart(totals, grandTotal) {
   });
 
   // 图例
-  svg += `<text x="200" y="18" font-size="12" font-weight="700" fill="#1d1d1f">合计 ¥${grandTotal>=10000?(grandTotal/10000).toFixed(1)+'万':Math.round(grandTotal)}</text>`;
+  svg += `<text x="200" y="18" font-size="12" font-weight="700" fill="${t1}">合计 ${CUR()}${grandTotal>=10000?(grandTotal/10000).toFixed(1)+'万':Math.round(grandTotal)}</text>`;
   let legendY = 42;
   totals.filter(t => t.amount > 0).forEach(t => {
     const pct = (t.amount/grandTotal*100).toFixed(1);
     svg += `<rect x="200" y="${legendY-9}" width="10" height="10" rx="2" fill="${t.project.color}"/>`;
-    svg += `<text x="216" y="${legendY}" font-size="11" fill="#1d1d1f">${t.project.name}</text>`;
-    svg += `<text x="216" y="${legendY+13}" font-size="10" fill="#aeaeb2">¥${fmtMoney(t.amount)} · ${pct}%</text>`;
+    svg += `<text x="216" y="${legendY}" font-size="11" fill="${t1}">${t.project.name}</text>`;
+    svg += `<text x="216" y="${legendY+13}" font-size="10" fill="${txt2}">${CUR()}${fmtMoney(t.amount)} · ${pct}%</text>`;
     legendY += 34;
   });
   svg += `</svg>`;
@@ -1551,6 +1646,85 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ===== 设置（币种）=====
+function showSettingsSheet() {
+  const opts = Object.keys(VALID_CURRENCIES).map(c =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;margin-bottom:8px;cursor:pointer;${state.currency===c?'background:var(--primary-bg);border:1.5px solid var(--primary);':'background:var(--bg);border:1.5px solid transparent;'}" onclick="setCurrency('${c}')">
+      <span style="font-size:18px;font-weight:700;color:var(--primary);width:26px;">${c}</span>
+      <span style="font-size:14px;color:var(--text-2);">${VALID_CURRENCIES[c]}</span>
+      ${state.currency===c?'<span style="margin-left:auto;color:var(--primary);font-size:14px;">✓ 当前</span>':''}
+    </div>`
+  ).join('');
+  openSheet(`
+    <div class="sheet-title">设置</div>
+    <div class="sheet-body">
+      <label class="form-label">显示币种</label>
+      ${opts}
+      <div style="font-size:12px;color:var(--text-3);line-height:1.5;margin-top:6px;">切换后全站金额（总存款、统计、中长期激励等）会统一使用该符号显示。</div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" onclick="closeSheet()">关闭</button>
+    </div>
+  `);
+}
+function setCurrency(c) {
+  if (!VALID_CURRENCIES[c]) return;
+  state.currency = c;
+  saveData();
+  closeSheet();
+  render();
+  toast('币种已切换为 ' + c);
+}
+
+// ===== 搜索记录 =====
+function showSearchSheet() {
+  openSheet(`
+    <div class="sheet-title">搜索记录</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <input type="search" class="form-input" id="searchInput" placeholder="按备注搜索，如：工资、理财收益..." oninput="renderSearchResults(this.value)">
+      </div>
+      <div id="searchResults"></div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-secondary" onclick="closeSheet()">关闭</button>
+    </div>
+  `);
+  const si = document.getElementById('searchInput');
+  if (si) { si.focus(); renderSearchResults(''); }
+}
+function renderSearchResults(q) {
+  const el = document.getElementById('searchResults');
+  if (!el) return;
+  q = (q || '').trim().toLowerCase();
+  if (!q) {
+    el.innerHTML = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:30px 0;">输入关键词，在所有项目的记录备注中搜索</div>`;
+    return;
+  }
+  let hits = state.records.filter(r => (r.note || '').toLowerCase().indexOf(q) >= 0);
+  hits = hits.sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (hits.length === 0) {
+    el.innerHTML = `<div style="text-align:center;color:var(--text-3);font-size:13px;padding:30px 0;">没有找到匹配的记录</div>`;
+    return;
+  }
+  let html = `<div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">找到 ${hits.length} 条记录</div>`;
+  hits.forEach(r => {
+    const p = state.projects.find(x => x.id === r.projectId);
+    const pname = p ? p.name : '已删除项目';
+    const pcolor = p ? p.color : '#aeaeb2';
+    const neg = r.amount < 0 ? 'color:var(--red);' : '';
+    html += `<div onclick="editRecord('${r.id}')" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:8px;cursor:pointer;">
+      <span class="project-color" style="background:${pcolor};flex-shrink:0;"></span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;">${pname}</div>
+        <div style="font-size:12px;color:var(--text-3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fmtDateFull(r.date)} · ${r.note || '无备注'}</div>
+      </div>
+      <div style="font-size:15px;font-weight:700;white-space:nowrap;${neg}">${CUR()}${fmtMoney(r.amount)}</div>
+    </div>`;
+  });
+  el.innerHTML = html;
 }
 
 // ===== 添加记录 =====
@@ -1756,7 +1930,7 @@ function showProjectDetail(pid) {
       listHtml += `<div onclick="editRecord('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;padding-right:10px;">
           <div style="font-size:12px;color:var(--text-3);">${fmtDateFull(r.date)} ${fmtTime(r.date)}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;${neg}">¥${fmtMoney(r.amount)}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;${neg}">${CUR()}${fmtMoney(r.amount)}</div>
           ${r.note ? `<div style="font-size:12px;color:var(--text-3);margin-top:2px;">备注：${r.note}</div>` : ''}
         </div>
         <button class="mini-btn" onclick="event.stopPropagation();deleteProjectRecord('${r.id}','${pid}')" title="删除" style="color:var(--red);font-size:15px;">🗑</button>
@@ -1784,7 +1958,7 @@ function showProjectDetail(pid) {
       </div>
       <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>当前余额</span><span>¥${fmtMoney(amount)}</span>
+          <span>当前余额</span><span>${CUR()}${fmtMoney(amount)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
           <span>占总存款比例</span><span>${sharePct.toFixed(1)}%</span>
@@ -1921,6 +2095,7 @@ function exportData() {
     goal: state.goal || 0,
     equity: state.equity || [],
     currentPrice: state.currentPrice || 19,
+    currency: state.currency || '¥',
     exportedAt: new Date().toISOString()
   }, null, 2);
   const blob2 = new Blob([json], { type: 'application/json' });
@@ -1964,6 +2139,7 @@ function handleImportFile(input) {
       if (typeof data.goal === 'number') state.goal = data.goal;
       if (typeof data.activeTab === 'string') state.activeTab = data.activeTab;
       if (Number(data.currentPrice) > 0) state.currentPrice = Number(data.currentPrice);
+      if (VALID_CURRENCIES[data.currency]) state.currency = data.currency;
       saveData();
       render();
       toast('备份已导入');
@@ -2065,7 +2241,7 @@ function renderEquity() {
   // 现行股价编辑条（点击修改，全站预计金额统一按此价估算）
   html += `<div onclick="showSetPriceSheet()" style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border-radius:12px;padding:10px 14px;margin:0 4px 12px;cursor:pointer;">
     <span style="font-size:13px;color:var(--text-2);">现行股价</span>
-    <span style="font-size:15px;font-weight:700;color:var(--primary);">¥${fmtMoney(getCurrentPrice())} <span style="color:var(--text-3);font-weight:400;font-size:13px;">›</span></span>
+    <span style="font-size:15px;font-weight:700;color:var(--primary);">${CUR()}${fmtMoney(getCurrentPrice())} <span style="color:var(--text-3);font-weight:400;font-size:13px;">›</span></span>
   </div>`;
   // 子视图切换：按项目 / 按解禁时间
   html += `<div class="sub-tabs">
@@ -2139,12 +2315,12 @@ function renderEquity() {
         </div>
         <div style="flex:1;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">预计金额</div>
-          <div style="font-size:18px;font-weight:700;color:var(--primary);">¥${fmtMoney(remainVal)}</div>
+          <div style="font-size:18px;font-weight:700;color:var(--primary);">${CUR()}${fmtMoney(remainVal)}</div>
         </div>
       </div>
       <!-- 底部详情行 -->
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);">
-        <span>授予 ${Math.round(total).toLocaleString('zh-CN')} 股 · 价 ¥${fmtMoney(g.grantPrice)}</span>
+        <span>授予 ${Math.round(total).toLocaleString('zh-CN')} 股 · 价 ${CUR()}${fmtMoney(g.grantPrice)}</span>
         <span>已解禁 ${Math.round(vestedShares).toLocaleString('zh-CN')} 股 · ${pct.toFixed(0)}%</span>
       </div>
       ${pct > 0 && pct < 100 ? `<div class="goal-bar-track" style="margin-top:6px;"><div class="goal-bar-fill" style="width:${pct}%"></div></div>` : ''}
@@ -2238,7 +2414,7 @@ function renderEquityTimeView() {
         </div>
         <div style="flex:1;text-align:right;">
           <div style="font-size:11px;color:var(--green);margin-bottom:2px;">&nbsp;</div>
-          <div style="font-size:17px;font-weight:700;color:var(--green);">¥${fmtMoney(vestedAmount)}</div>
+          <div style="font-size:17px;font-weight:700;color:var(--green);">${CUR()}${fmtMoney(vestedAmount)}</div>
         </div>
       </div>` : ''}
       <!-- 第二行：预计解禁（现行股价估算）-->
@@ -2249,7 +2425,7 @@ function renderEquityTimeView() {
         </div>
         <div style="flex:1;text-align:right;">
           <div style="font-size:11px;color:var(--text-3);margin-bottom:2px;">&nbsp;</div>
-          <div style="font-size:17px;font-weight:700;color:var(--primary);">¥${fmtMoney(expectAmount)}</div>
+          <div style="font-size:17px;font-weight:700;color:var(--primary);">${CUR()}${fmtMoney(expectAmount)}</div>
         </div>
       </div>` : ''}`;
     // 分项明细：基于 itemDetails 渲染
@@ -2267,7 +2443,7 @@ function renderEquityTimeView() {
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div style="font-size:14px;font-weight:700;color:${d.isVested ? 'var(--green)' : 'var(--text-1,#1d1d1f)'};">${Math.round(d.actualShares).toLocaleString('zh-CN')} 股</div>
-          <div style="font-size:13px;font-weight:600;color:${amountColor};">¥${fmtMoney(d.actualAmount)}</div>
+          <div style="font-size:13px;font-weight:600;color:${amountColor};">${CUR()}${fmtMoney(d.actualAmount)}</div>
         </div>
       </div>`;
     });
@@ -2314,7 +2490,7 @@ function savePrice() {
   saveData();
   closeSheet();
   render();
-  toast('现行股价已更新为 ¥' + fmtMoney(val));
+  toast('现行股价已更新为 ' + CUR() + fmtMoney(val));
 }
 
 function showAddEquitySheet() {
@@ -2460,7 +2636,7 @@ function showEquityDetail(eqId) {
       planHtml += `<div style="display:flex;align-items:center;padding:12px 16px;border-bottom:0.5px solid var(--border);cursor:pointer;" ${clickAction}>
         <div style="flex:1;padding-right:10px;">
           <div style="font-size:12px;color:var(--text-3);">第${p.batch}批 · ${displayDate}</div>
-          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${p.matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${Math.round(displayShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(displayAmount)}</div>
+          <div style="font-size:15px;font-weight:600;margin-top:3px;color:${p.matched ? 'var(--green)' : 'var(--text-1,#1d1d1f)'}">${Math.round(displayShares).toLocaleString('zh-CN')} 股 · ${CUR()}${fmtMoney(displayAmount)}</div>
           ${noteText ? `<div style="font-size:11px;color:var(--text-3);margin-top:1px;">${noteText}</div>` : ''}
         </div>
         <div style="font-size:12px;color:${statusColor};white-space:nowrap;flex-shrink:0;padding-left:6px;">${statusText}</div>
@@ -2477,22 +2653,22 @@ function showEquityDetail(eqId) {
     <div class="sheet-body">
       <div style="background:var(--bg);border-radius:12px;padding:14px;margin:12px 0;">
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>授予总额</span><span>¥${fmtMoney(g.totalAmount)}</span>
+          <span>授予总额</span><span>${CUR()}${fmtMoney(g.totalAmount)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>授予价</span><span>¥${fmtMoney(g.grantPrice)}/股</span>
+          <span>授予价</span><span>${CUR()}${fmtMoney(g.grantPrice)}/股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
           <span>授予总股数</span><span>${Math.round(total).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
-          <span>已解禁</span><span>${Math.round(vestedShares).toLocaleString('zh-CN')} 股 · ¥${fmtMoney(vestedAmount)}</span>
+          <span>已解禁</span><span>${Math.round(vestedShares).toLocaleString('zh-CN')} 股 · ${CUR()}${fmtMoney(vestedAmount)}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary);margin-top:8px;">
           <span>剩余股数</span><span>${Math.round(remainShares).toLocaleString('zh-CN')} 股</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-3);margin-top:2px;">
-          <span></span><span>按现价 ¥${fmtMoney(price)} 估算 ¥${fmtMoney(remainVal)}</span>
+          <span></span><span>按现价 ${CUR()}${fmtMoney(price)} 估算 ${CUR()}${fmtMoney(remainVal)}</span>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-2);margin-bottom:6px;">
@@ -2759,6 +2935,7 @@ function deleteEquity(eqId) {
 }
 
 // ===== 初始化 =====
+applyTheme();
 loadData();
 render();
 
@@ -2771,7 +2948,7 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     // 用 ?v=4 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v4
-    navigator.serviceWorker.register('./sw.js?v=4').then((reg) => {
+    navigator.serviceWorker.register('./sw.js?v=5').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
