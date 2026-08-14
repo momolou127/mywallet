@@ -1026,6 +1026,23 @@ function getTotalLatest() {
   return { total, latestDate, prevTotal: hasPrev ? prevTotal : null };
 }
 
+// 计算年初（当年最早一条记录）各项目的总额，用于"较年初"对比
+function getYearStartTotal() {
+  const now = new Date();
+  const year = now.getFullYear();
+  let total = 0;
+  let hasData = false;
+  state.projects.forEach(p => {
+    // 找该项目当年的第一条记录（最接近年初）
+    const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getFullYear() === year);
+    if (recs.length > 0) {
+      total += recs[0].amount; // 当年第一条就是年初基准
+      hasData = true;
+    }
+  });
+  return hasData ? total : null;
+}
+
 // ===== 渲染 =====
 function render() {
   renderTabs();
@@ -1295,12 +1312,20 @@ function renderStats() {
   });
   const grandTotal = totals.reduce((s,t) => s + t.amount, 0);
 
-  // 总体环比
+  // 总体环比（较上次/较月初）
   const { prevTotal } = getTotalLatest();
   let totalDiff = 0, totalPct = 0;
   if (prevTotal !== null && prevTotal > 0) {
     totalDiff = grandTotal - prevTotal;
     totalPct = totalDiff / prevTotal * 100;
+  }
+
+  // 较年初对比
+  const yearStartTotal = getYearStartTotal();
+  let yearDiff = 0, yearPct = 0;
+  if (yearStartTotal !== null && yearStartTotal > 0) {
+    yearDiff = grandTotal - yearStartTotal;
+    yearPct = yearDiff / yearStartTotal * 100;
   }
 
   // 总目标进度卡（始终显示，点击卡片即可设置/修改，不再单独一行按钮）
@@ -1329,23 +1354,27 @@ function renderStats() {
   let html = `${goalCard}
 
     <div class="summary-row">
-      <div class="summary-box">
+      <div class="summary-box" style="flex:1.4;">
         <div class="summary-box-label">当前总额</div>
         <div class="summary-box-value">¥${fmtMoney(grandTotal)}</div>
       </div>
       <div class="summary-box">
-        <div class="summary-box-label">较上次</div>
-        <div class="summary-box-value ${totalDiff>0?'green':totalDiff<0?'red':''}">${totalDiff>0?'↑':totalDiff<0?'↓':'—'} ${totalDiff!==0?'¥'+fmtMoney(Math.abs(totalDiff)):'0'}</div>
+        <div class="summary-box-label">较上月</div>
+        <div class="summary-box-value ${totalDiff>0?'green':totalDiff<0?'red':''}">${totalDiff>0?'↑':totalDiff<0?'↓':'—'} ${totalDiff!==0?'¥'+fmtMoney(Math.abs(totalDiff)):'—'}</div>
       </div>
     </div>
     <div class="summary-row">
       <div class="summary-box">
-        <div class="summary-box-label">环比变化</div>
+        <div class="summary-box-label">较上月</div>
         <div class="summary-box-value ${totalPct>0?'green':totalPct<0?'red':''}">${totalPct>0?'+':''}${totalPct.toFixed(1)}%</div>
       </div>
       <div class="summary-box">
-        <div class="summary-box-label">项目数</div>
-        <div class="summary-box-value">${projects.length}</div>
+        <div class="summary-box-label">较年初</div>
+        <div class="summary-box-value ${yearDiff>0?'green':yearDiff<0?'red':''}" style="font-size:13px;line-height:1.3;">
+          ${yearStartTotal !== null
+            ? `<span>${yearPct>0?'+':''}${yearPct.toFixed(1)}%</span><br><span style="font-weight:600;">${yearDiff>0?'↑':yearDiff<0?'↓':'—'} ${yearDiff!==0?'¥'+fmtMoney(Math.abs(yearDiff)):'—'}</span>`
+            : '—'}
+        </div>
       </div>
     </div>
   `;
