@@ -886,7 +886,7 @@ body {
     <div class="header-actions">
       <button class="icon-btn" id="themeToggle" onclick="toggleTheme()" title="切换深浅色">🌙</button>
       <button class="icon-btn" onclick="showSearchSheet()" title="搜索记录">🔍</button>
-      <button class="icon-btn" onclick="showSettingsSheet()" title="设置">⚙</button>
+      <button class="icon-btn" id="amountToggle" onclick="toggleAmountVisibility()" title="隐藏/显示金额"></button>
       <button class="icon-btn" onclick="exportData()" title="导出备份">↓</button>
       <button class="icon-btn" onclick="importData()" title="导入备份">↑</button>
       <button class="icon-btn" onclick="onHeaderAddClick()" title="新增">＋</button>
@@ -1054,6 +1054,7 @@ function seedDemo() {
 
 // ===== 工具 =====
 function fmtMoney(n) {
+  if (amountHidden) return '****';
   return Number(n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso) {
@@ -1660,34 +1661,22 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ===== 设置（币种）=====
-function showSettingsSheet() {
-  const opts = Object.keys(VALID_CURRENCIES).map(c =>
-    `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;margin-bottom:8px;cursor:pointer;${state.currency===c?'background:var(--primary-bg);border:1.5px solid var(--primary);':'background:var(--bg);border:1.5px solid transparent;'}" onclick="setCurrency('${c}')">
-      <span style="font-size:18px;font-weight:700;color:var(--primary);width:26px;">${c}</span>
-      <span style="font-size:14px;color:var(--text-2);">${VALID_CURRENCIES[c]}</span>
-      ${state.currency===c?'<span style="margin-left:auto;color:var(--primary);font-size:14px;">✓ 当前</span>':''}
-    </div>`
-  ).join('');
-  openSheet(`
-    <div class="sheet-title">设置</div>
-    <div class="sheet-body">
-      <label class="form-label">显示币种</label>
-      ${opts}
-      <div style="font-size:12px;color:var(--text-3);line-height:1.5;margin-top:6px;">切换后全站金额（总存款、统计、中长期激励等）会统一使用该符号显示。</div>
-    </div>
-    <div class="sheet-actions">
-      <button class="btn-secondary" onclick="closeSheet()">关闭</button>
-    </div>
-  `);
+// ===== 隐藏/显示金额 =====
+let amountHidden = localStorage.getItem('dw_hide') === '1';
+function applyAmountToggle() {
+  const b = document.getElementById('amountToggle');
+  if (b) {
+    b.textContent = amountHidden ? '🙈' : '👁';
+    b.title = amountHidden ? '点击显示金额' : '点击隐藏金额';
+  }
+  document.body.classList.toggle('amount-hidden', amountHidden);
 }
-function setCurrency(c) {
-  if (!VALID_CURRENCIES[c]) return;
-  state.currency = c;
-  saveData();
-  closeSheet();
+function toggleAmountVisibility() {
+  amountHidden = !amountHidden;
+  localStorage.setItem('dw_hide', amountHidden ? '1' : '0');
+  applyAmountToggle();
   render();
-  toast('币种已切换为 ' + c);
+  toast(amountHidden ? '金额已隐藏' : '金额已显示');
 }
 
 // ===== 搜索记录 =====
@@ -2948,6 +2937,7 @@ function deleteEquity(eqId) {
 
 // ===== 初始化 =====
 applyTheme();
+applyAmountToggle();
 loadData();
 render();
 
@@ -2959,8 +2949,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=6 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v6
-    navigator.serviceWorker.register('./sw.js?v=6').then((reg) => {
+    // 用 ?v=7 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v7
+    navigator.serviceWorker.register('./sw.js?v=7').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
