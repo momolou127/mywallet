@@ -1,7 +1,7 @@
 // 存款记 - Service Worker（PWA 离线可用）
 // 策略：stale-while-revalidate（先返回缓存保流畅，后台异步拉新版覆盖）
-// 缓存版本：v10（每次发布新功能时 bump 一次，避免被旧缓存卡住）
-const CACHE_NAME = 'deposit-tracker-v10';
+// 缓存版本：v11（每次发布新功能时 bump 一次，避免被旧缓存卡住）
+const CACHE_NAME = 'deposit-tracker-v11';
 const PRECACHE_URLS = [
   './',
   './index.html',

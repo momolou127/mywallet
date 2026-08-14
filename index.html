@@ -2234,6 +2234,27 @@ function computeVestPlan(g) {
   return plan;
 }
 
+// 统一匹配某批次的 vest 记录：优先精确 batch；fallback 匹配游离记录（股数接近+90天窗口，且批次已到期）
+// 首页卡片/详情页/按解禁时间/批次选择器共用，保证各处"已解禁"显示一致
+// looseMatched 用于防止同一游离记录被多个批次重复占用
+function matchVestForPlan(g, planBatch, looseMatched) {
+  const vests = g.vests || [];
+  const exact = vests.find(v => v.batch === planBatch.batch);
+  if (exact) return exact;
+  // 批次未到期时不匹配游离记录（避免旧版加号录入的游离记录挂到未到期批次上）
+  if (new Date(planBatch.date) > new Date()) return null;
+  const loose = vests.filter(v => v.batch == null);
+  if (!loose.length) return null;
+  let best = null, bestDiff = Infinity;
+  loose.forEach(v => {
+    if (looseMatched && looseMatched.has(v.id)) return;
+    const d = Math.abs((new Date(v.date) - new Date(planBatch.date)) / 86400000);
+    if (Math.abs((v.shares||0) - planBatch.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
+  });
+  if (best && looseMatched) looseMatched.add(best.id);
+  return best;
+}
+
 function setEquityView(v) {
   state.equityView = v;
   renderEquity();
@@ -2285,23 +2306,10 @@ function renderEquity() {
 
     // 与详情页 showEquityDetail 同源：基于 plan-vest 映射计算，排除游离旧记录
     const planBatches = computeVestPlan(g);
-    const vests = g.vests || [];
-    const batchVests = vests.filter(v => v.batch != null);
-    const looseVests = vests.filter(v => v.batch == null);
     const looseMatched = new Set();
     const matchedPlan = planBatches.map(p => {
-      const exact = batchVests.find(v => v.batch === p.batch);
-      let m = exact;
-      if (!m && looseVests.length) {
-        let best = null, bestDiff = Infinity;
-        looseVests.forEach(v => {
-          if (looseMatched.has(v.id)) return;
-          const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
-          if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
-        });
-        if (best) { looseMatched.add(best.id); m = best; }
-      }
-      return { ...p, matched: m };
+      const matched = matchVestForPlan(g, p, looseMatched);
+      return { ...p, matched };
     });
 
     const vestedShares = matchedPlan.reduce((s, m) => s + (m.matched ? (m.matched.shares||0) : 0), 0);
@@ -2373,25 +2381,12 @@ function renderEquityTimeView() {
     const now = new Date();
 
     // === 先逐批计算分项实际值 + 是否已解锁（基于 vest 匹配而非仅计划日期）===
+    // 每个授予独立维护 looseMatched，防止同一游离记录被多个批次占用
+    const grantLooseMatched = {};
     const itemDetails = items.map(item => {
-      // 尝试匹配该批次的 vest 记录（优先 batch 精确匹配，fallback 同年+股数接近）
-      let matchVest = null;
-      const planDateYear = new Date(item.date).getFullYear();
-
-      // 策略1：精确 batch 匹配
-      matchVest = (item.grant.vests || []).find(v => v.batch === item.batch) || null;
-      // 策略2：同年+股数接近 fallback（兼容无 batch 的旧数据）
-      if (!matchVest) {
-        const candidates = (item.grant.vests || []).filter(v =>
-          new Date(v.date).getFullYear() === planDateYear &&
-          Math.abs((v.shares || 0) - item.shares) < item.shares * 0.5   // 股数偏差<50%
-        );
-        if (candidates.length > 0) {
-          // 取股数最接近的
-          candidates.sort((a, b) => Math.abs((a.shares||0)-item.shares) - Math.abs((b.shares||0)-item.shares));
-          matchVest = candidates[0];
-        }
-      }
+      // 与首页卡片/详情页同一匹配逻辑：优先精确 batch，fallback 游离记录（批次到期才匹配）
+      if (!grantLooseMatched[item.grant.id]) grantLooseMatched[item.grant.id] = new Set();
+      const matchVest = matchVestForPlan(item.grant, item, grantLooseMatched[item.grant.id]);
 
       const isVested = !!matchVest;   // 有匹配 vest = 已解锁（即使计划日期未到）
       const planPassed = new Date(item.date) <= now;  // 计划日期是否已到
@@ -2593,25 +2588,12 @@ function showEquityDetail(eqId) {
 
   // 解禁计划（自动生成）
   const plan = computeVestPlan(g);
-  const vests = g.vests || [];
 
   // === 先做 plan-vest 映射（与下方渲染同逻辑），汇总从匹配结果计算 ===
-  const batchVests = vests.filter(v => v.batch != null);
-  const looseVests = vests.filter(v => v.batch == null);
   const looseMatched = new Set();
   const planMatched = plan.map(p => {
     const passed = new Date(p.date) <= new Date();
-    const exact = batchVests.find(v => v.batch === p.batch);
-    let matched = exact;
-    if (!matched && passed && looseVests.length) {
-      let best = null, bestDiff = Infinity;
-      looseVests.forEach(v => {
-        if (looseMatched.has(v.id)) return;
-        const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
-        if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
-      });
-      if (best) { looseMatched.add(best.id); matched = best; }
-    }
+    const matched = matchVestForPlan(g, p, looseMatched);
     return { ...p, passed, matched };
   });
 
@@ -2706,23 +2688,10 @@ function showVestBatchPicker(eqId) {
   const g = (state.equity || []).find(x => x.id === eqId);
   if (!g) return;
   const plan = computeVestPlan(g);
-  const vests = g.vests || [];
-  const batchVests = vests.filter(v => v.batch != null);
-  const looseVests = vests.filter(v => v.batch == null);
   const looseMatched = new Set();
   const planMatched = plan.map(p => {
     const passed = new Date(p.date) <= new Date();
-    const exact = batchVests.find(v => v.batch === p.batch);
-    let matched = exact;
-    if (!matched && passed && looseVests.length) {
-      let best = null, bestDiff = Infinity;
-      looseVests.forEach(v => {
-        if (looseMatched.has(v.id)) return;
-        const d = Math.abs((new Date(v.date) - new Date(p.date)) / 86400000);
-        if (Math.abs((v.shares||0) - p.shares) < 1 && d <= 90 && d < bestDiff) { best = v; bestDiff = d; }
-      });
-      if (best) { looseMatched.add(best.id); matched = best; }
-    }
+    const matched = matchVestForPlan(g, p, looseMatched);
     return { ...p, passed, matched };
   });
 
@@ -3043,8 +3012,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=10 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v10
-    navigator.serviceWorker.register('./sw.js?v=10').then((reg) => {
+    // 用 ?v=11 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v11
+    navigator.serviceWorker.register('./sw.js?v=11').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
