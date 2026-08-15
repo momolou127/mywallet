@@ -2726,28 +2726,13 @@ function showVestBatchPicker(eqId) {
   `);
 }
 
-// 查找某批次对应的解锁记录：优先精确 batch，否则按股数/日期综合评分匹配（兼容游离记录，无硬性天数限制）
-// 批次表单 showVestSheet 与删除 deleteVestBatch 共用此逻辑，保证"能显示删除按钮就一定能删掉"
+// 查找某批次对应的解锁记录：与详情页 matchVestForPlan 同一逻辑（精确 batch → 批次到期才匹配游离记录）
+// 批次表单 showVestSheet 与删除 deleteVestBatch 共用此逻辑，保证"详情页显示未解锁则表单不带出内容"
 function findVestForBatch(g, batch) {
-  const vests = g.vests || [];
-  const exact = vests.find(v => v.batch === batch);
-  if (exact) return exact;
-  if (!vests.length) return null;
   const plan = computeVestPlan(g);
   const planBatch = plan.find(p => p.batch === batch);
   if (!planBatch) return null;
-  const pd = new Date(planBatch.date);
-  const perShare = planBatch.shares;
-  const usedIds = new Set(vests.filter(v => v.batch != null).map(v => v.id));
-  let best = null, bestScore = Infinity;
-  vests.forEach(v => {
-    if (usedIds.has(v.id)) return;   // 已被其他批次占用
-    const shareDiff = Math.abs((v.shares||0) - perShare);
-    const dayDiff = Math.abs((new Date(v.date) - pd) / 86400000);
-    const score = shareDiff * 10 + dayDiff;   // 股数差异权重更高
-    if (score < bestScore) { best = v; bestScore = score; }
-  });
-  return (best && bestScore < perShare * 5) ? best : null;   // 股数差异不超过50%即合理匹配
+  return matchVestForPlan(g, planBatch, new Set());
 }
 
 // 记/编辑解锁：batch 指定批次时，直接挂到解禁计划的对应批次上（不再单独加一笔）
@@ -3017,8 +3002,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=12 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v12
-    navigator.serviceWorker.register('./sw.js?v=12').then((reg) => {
+    // 用 ?v=13 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v13
+    navigator.serviceWorker.register('./sw.js?v=13').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
