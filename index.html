@@ -1578,8 +1578,14 @@ function drawTrendChart() {
   const max = Math.max(...points.map(p => p.total), 0);
   const min = Math.min(0, ...points.map(p => p.total));
   const range = max - min || 1;
-  const xStep = points.length > 1 ? cw / (points.length - 1) : 0;
-  const barW = Math.max(6, Math.min(28, xStep * 0.6));
+  const n = points.length;
+  // 柱子排布：点数多时填满宽度；点数少（≤6）时用固定间距并整体居中，避免柱子贴左右两端
+  const slotW = n > 1 ? cw / (n - 1) : 0;
+  const barW = Math.max(6, Math.min(28, slotW * 0.6));
+  const spacing = n > 6 ? slotW : Math.min(slotW || barW * 2, barW * 2.2);
+  const totalW = n > 1 ? spacing * (n - 1) : 0;
+  const startX = pad.l + Math.max(0, (cw - totalW) / 2);
+  const xAt = i => startX + i * spacing;
   const baseY = pad.t + ch - (0 - min) / range * ch;
 
   let svg = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg">`;
@@ -1594,7 +1600,7 @@ function drawTrendChart() {
   svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="${baseC}" stroke-width="1"/>`;
   // 柱体：月末点用主色，当前点用绿色实心
   points.forEach((p, i) => {
-    const x = pad.l + i * xStep;
+    const x = xAt(i);
     const y = pad.t + ch - (p.total - min) / range * ch;
     const top = Math.min(y, baseY);
     const barH = Math.max(2, Math.abs(y - baseY));
@@ -1602,11 +1608,11 @@ function drawTrendChart() {
     const rx = Math.min(3, barW / 2);
     svg += `<rect x="${(x - barW/2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="${rx}" fill="${fill}" opacity="${p.isMonthEnd?0.9:1}"/>`;
   });
-  // X轴标签：月末点显示"X月"，当前点显示"当前"
+  // X轴标签：月末点显示"X月"，当前点显示"当前"（跟随柱子居中排布）
   const labelCount = Math.min(5, points.length);
   for (let i = 0; i < labelCount; i++) {
     const idx = labelCount === 1 ? points.length-1 : Math.floor(i * (points.length-1) / (labelCount-1));
-    const x = pad.l + idx * xStep;
+    const x = xAt(idx);
     const label = points[idx].isMonthEnd ? `${new Date(points[idx].date).getMonth()+1}月` : '当前';
     svg += `<text x="${x}" y="${h-8}" font-size="9" fill="${txtC}" text-anchor="middle">${label}</text>`;
   }
@@ -3019,8 +3025,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=15 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v15
-    navigator.serviceWorker.register('./sw.js?v=15').then((reg) => {
+    // 用 ?v=16 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v16
+    navigator.serviceWorker.register('./sw.js?v=16').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
