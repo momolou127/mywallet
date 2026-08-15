@@ -1121,13 +1121,15 @@ function getTotalLatest() {
 }
 
 // 计算截止某日期（含当天）的总存款快照；项目在该日期尚未有记录则按 0 计
-function getTotalAtDate(dateStr) {
+// projectList 可选：限定只统计这些项目（用于筛选账户时口径与"当前总额"一致，避免混入其他账户）
+function getTotalAtDate(dateStr, projectList) {
   if (!dateStr) return null;
   const parts = dateStr.split('-');
   const cutoff = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59).getTime();
+  const list = (projectList && projectList.length) ? projectList : state.projects;
   let total = 0;
   let has = false;
-  state.projects.forEach(p => {
+  list.forEach(p => {
     const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getTime() <= cutoff);
     if (recs.length) { total += recs[recs.length - 1].amount; has = true; }
   });
@@ -1417,16 +1419,16 @@ function renderStats() {
   });
   const grandTotal = totals.reduce((s,t) => s + t.amount, 0);
 
-  // 较上月：本月总额相比上月末总额
-  const prevTotal = getTotalAtDate(getLastMonthEndStr());
+  // 较上月：本月总额相比上月末总额（限定当前筛选项目，保证口径与"当前总额"一致）
+  const prevTotal = getTotalAtDate(getLastMonthEndStr(), projects);
   let totalDiff = 0, totalPct = 0;
   if (prevTotal !== null && prevTotal > 0) {
     totalDiff = grandTotal - prevTotal;
     totalPct = prevTotal ? totalDiff / prevTotal * 100 : 0;
   }
 
-  // 较年初：本月总额相比今年 1 月 1 日总额
-  const yearStartTotal = getTotalAtDate(getYearStartStr());
+  // 较年初：本月总额相比今年 1 月 1 日总额（限定当前筛选项目）
+  const yearStartTotal = getTotalAtDate(getYearStartStr(), projects);
   let yearDiff = 0, yearPct = 0;
   if (yearStartTotal !== null && yearStartTotal > 0) {
     yearDiff = grandTotal - yearStartTotal;
@@ -1542,32 +1544,41 @@ function drawTrendChart() {
   if (!container) return;
 
   let projects = state.activeTab === 'all' ? state.projects : state.projects.filter(p => p.id === state.activeTab);
-  const allDates = [...new Set(state.records.filter(r => state.activeTab==='all' || r.projectId===state.activeTab).map(r => fmtDateFull(r.date)))].sort();
+  const projIds = state.activeTab === 'all' ? null : projects.map(p => p.id);
+  const filtered = state.records.filter(r => projIds ? projIds.includes(r.projectId) : true);
+  if (!filtered.length) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
 
-  if (allDates.length === 0) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
+  // 按各自然月末的时点值聚合：从最早有记录的月份到上月末，每月一个点；另加"当前"点（截至今天）
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const minT = Math.min(...filtered.map(r => new Date(r.date).getTime()));
+  const firstMonth = new Date(minT); firstMonth.setDate(1); firstMonth.setHours(0,0,0,0);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0); // 上月末
 
-  // 对每个日期，计算该日期及之前每个项目的最新值之和
-  const points = allDates.map(d => {
-    const dTime = new Date(d).getTime() + 86400000;
-    let total = 0;
-    projects.forEach(p => {
-      const recs = getProjectRecords(p.id).filter(r => new Date(r.date).getTime() < dTime);
-      if (recs.length) total += recs[recs.length-1].amount;
-    });
-    return { date: d, total };
-  });
+  const points = [];
+  // 各月末（从最早月一直到上月末）
+  for (let d = new Date(firstMonth); d <= lastMonthEnd; d.setMonth(d.getMonth()+1)) {
+    const y = d.getFullYear(), m = d.getMonth();
+    const end = new Date(y, m+1, 0);
+    const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+    const t = getTotalAtDate(ds, projects);
+    if (t !== null) points.push({ date: ds, isMonthEnd: true, total: t });
+  }
+  // 当前时点（截至今天）
+  const curTotal = getTotalAtDate(todayStr, projects);
+  if (curTotal !== null) points.push({ date: todayStr, isMonthEnd: false, total: curTotal });
 
-  // 限制最近30个点
-  const showPoints = points.slice(-30);
+  if (!points.length) { container.innerHTML = '<div style="text-align:center;color:var(--text-3);padding:20px;font-size:13px">暂无数据</div>'; return; }
+
   const grid = cssVar('--chart-grid', '#f0f0f0');
   const txtC = cssVar('--chart-text', '#aeaeb2');
   const baseC = cssVar('--chart-base', '#cfcfcf');
   const w = 350, h = 180, pad = { l: 42, r: 10, t: 16, b: 28 };
   const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
-  const max = Math.max(...showPoints.map(p => p.total), 0);
-  const min = Math.min(0, ...showPoints.map(p => p.total));
+  const max = Math.max(...points.map(p => p.total), 0);
+  const min = Math.min(0, ...points.map(p => p.total));
   const range = max - min || 1;
-  const xStep = showPoints.length > 1 ? cw / (showPoints.length - 1) : 0;
+  const xStep = points.length > 1 ? cw / (points.length - 1) : 0;
   const barW = Math.max(6, Math.min(28, xStep * 0.6));
   const baseY = pad.t + ch - (0 - min) / range * ch;
 
@@ -1581,22 +1592,23 @@ function drawTrendChart() {
   });
   // 0 基线
   svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="${baseC}" stroke-width="1"/>`;
-  // 柱体
-  showPoints.forEach((p, i) => {
+  // 柱体：月末点用主色，当前点用绿色实心
+  points.forEach((p, i) => {
     const x = pad.l + i * xStep;
     const y = pad.t + ch - (p.total - min) / range * ch;
     const top = Math.min(y, baseY);
     const barH = Math.max(2, Math.abs(y - baseY));
-    const fill = p.total >= 0 ? '#6366f1' : '#ff3b30';
+    const fill = p.isMonthEnd ? '#6366f1' : '#34c759';
     const rx = Math.min(3, barW / 2);
-    svg += `<rect x="${(x - barW/2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="${rx}" fill="${fill}"/>`;
+    svg += `<rect x="${(x - barW/2).toFixed(1)}" y="${top.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="${rx}" fill="${fill}" opacity="${p.isMonthEnd?0.9:1}"/>`;
   });
-  // X轴日期
-  const labelCount = Math.min(4, showPoints.length);
+  // X轴标签：月末点显示"X月"，当前点显示"当前"
+  const labelCount = Math.min(5, points.length);
   for (let i = 0; i < labelCount; i++) {
-    const idx = labelCount === 1 ? 0 : Math.floor(i * (showPoints.length-1) / (labelCount-1));
+    const idx = labelCount === 1 ? points.length-1 : Math.floor(i * (points.length-1) / (labelCount-1));
     const x = pad.l + idx * xStep;
-    svg += `<text x="${x}" y="${h-8}" font-size="9" fill="${txtC}" text-anchor="middle">${fmtDate(showPoints[idx].date)}</text>`;
+    const label = points[idx].isMonthEnd ? `${new Date(points[idx].date).getMonth()+1}月` : '当前';
+    svg += `<text x="${x}" y="${h-8}" font-size="9" fill="${txtC}" text-anchor="middle">${label}</text>`;
   }
   svg += `</svg>`;
   container.innerHTML = svg;
@@ -3007,8 +3019,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=14 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v14
-    navigator.serviceWorker.register('./sw.js?v=14').then((reg) => {
+    // 用 ?v=15 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v15
+    navigator.serviceWorker.register('./sw.js?v=15').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
