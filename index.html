@@ -1346,23 +1346,28 @@ function initProjectDragSort(container) {
     const dy = docY - startDocY;
     const list = getList();
     const step = dragging.offsetHeight + 12; // 卡片底部间距12px
-    // 按手指当前文档位置解析应插入的目标槽位，直到列表末端
-    const targetIdx = clamp(Math.round(dy / step), -list.indexOf(dragging), list.length - 1 - list.indexOf(dragging));
-    if (targetIdx !== finalShift) {
-      const idx = list.indexOf(dragging);
-      const target = list[idx + (targetIdx - finalShift)];
-      if (target) {
-        container.insertBefore(dragging, targetIdx > finalShift ? target.nextSibling : target);
-      } else {
-        // 拖到末尾
-        container.appendChild(dragging);
+    // 当前dom位置 = 原始位置 + 已位移(finalShift)，反推原始索引
+    const origIndex = list.indexOf(dragging) - finalShift;
+    // 用绝对目标索引(0..n-1)解析目标槽位，避免随位移增大被误夹断
+    const targetShift = clamp(origIndex + Math.round(dy / step), 0, list.length - 1) - origIndex;
+    if (targetShift !== finalShift) {
+      const cur = list.indexOf(dragging);
+      const delta = targetShift - finalShift;
+      if (delta > 0) {
+        // 下移：插到 delta 个之后的元素后面
+        const after = list[cur + delta];
+        if (after && after !== dragging) container.insertBefore(dragging, after.nextSibling);
+      } else if (delta < 0) {
+        // 上移：插到 delta 个之前的元素前面
+        const before = list[cur + delta];
+        if (before && before !== dragging) container.insertBefore(dragging, before);
       }
-      finalShift = targetIdx;
+      finalShift = targetShift;
       syncStateOrder();
     }
-    // 被拖卡片跟随手指
+    // 被拖卡片跟随手指（dy 减去已换位占掉的槽位偏移）
     dragging.style.transition = 'none';
-    dragging.style.transform = `translateY(${dy - finalShift * step}px) scale(1.02)`;
+    dragging.style.transform = `translateY(${dy - targetShift * step}px) scale(1.02)`;
   }
 
   // 自动滚动：手指在顶部/底部边缘时驱动页面滚动，被拖卡片随之持续移动到目标位置
