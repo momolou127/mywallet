@@ -210,6 +210,10 @@ body {
   box-shadow: 0 8px 24px rgba(0,0,0,0.15);
   transform: scale(1.02);
   transition: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .drag-handle {
   position: absolute;
@@ -1295,7 +1299,7 @@ function renderHome() {
 // 长按 + 拖动排序（Pointer Events 实现）
 function initProjectDragSort(container) {
   const cards = [...container.querySelectorAll('.project-card')];
-  let startY = null, startX = null, dragging = null, longPress = false;
+  let startY = null, dragging = null, longPress = false;
   let pointerId = null;
   const pressMs = 350; // 长按触发阈值
   let pressTimer = null;
@@ -1306,22 +1310,18 @@ function initProjectDragSort(container) {
 
   const onMove = (e) => {
     if (!dragging || pointerId !== e.pointerId) return;
-    e.preventDefault();
+    const list = getList();
+    const step = dragging.offsetHeight + 12; // 卡片底部间距12px
     const dy = e.clientY - startY;
-    const dx = e.clientX - startX;
     // 长按触发前不允许移动（避免普通点击滚动被当成拖拽）
     if (!longPress) { onCancel(); return; }
     moved = true;
-    const list = getList();
-    let shift = Math.round(dy / (dragging.offsetHeight + 12)); // 卡片底部间距12px
+    let shift = Math.round(dy / step);
     const maxShift = list.length - 1 - list.indexOf(dragging);
     const minShift = -list.indexOf(dragging);
     shift = Math.max(minShift, Math.min(maxShift, shift));
-    // 让被拖卡片跟随手指
-    dragging.style.transition = 'none';
-    dragging.style.transform = `translateY(${dy}px) scale(1.02)`;
     if (shift !== finalShift) {
-      // 实时交换 DOM 顺序，显示目标占位
+      // 实时移动 DOM 顺序，显示目标占位
       const idx = list.indexOf(dragging);
       const target = list[idx + (shift - finalShift)];
       if (target) {
@@ -1330,6 +1330,9 @@ function initProjectDragSort(container) {
       finalShift = shift;
       syncStateOrder();
     }
+    // 被拖卡片跟随手指：dy 减去已换位占掉的偏移，避免位置跳变
+    dragging.style.transition = 'none';
+    dragging.style.transform = `translateY(${dy - finalShift * step}px) scale(1.02)`;
   };
 
   const onCancel = () => {
@@ -1358,10 +1361,13 @@ function initProjectDragSort(container) {
   }
 
   cards.forEach(card => {
+    // 长按拖动时屏蔽右键/长按菜单
+    const onCtx = (e) => { if (longPress || dragging) e.preventDefault(); };
+    card.addEventListener('contextmenu', onCtx);
     card.addEventListener('pointerdown', (e) => {
       if (e.target.closest('.project-actions') || e.target.closest('.mini-btn')) return; // 不干扰按钮
       pointerId = e.pointerId;
-      startY = e.clientY; startX = e.clientX;
+      startY = e.clientY;
       pressTimer = setTimeout(() => {
         if (pointerId === null) return;
         longPress = true;
@@ -1373,6 +1379,7 @@ function initProjectDragSort(container) {
     card.addEventListener('pointermove', onMove);
     card.addEventListener('pointerup', onCancel);
     card.addEventListener('pointercancel', onCancel);
+    card.addEventListener('lostpointercapture', onCancel);
   });
 }
 
