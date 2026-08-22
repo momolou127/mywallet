@@ -202,6 +202,9 @@ body {
   margin-bottom: 12px;
   box-shadow: var(--shadow);
   transition: transform 0.15s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .project-card.dragging { transition: none; }
 .project-card:active { transform: scale(0.98); }
@@ -1364,8 +1367,12 @@ function initProjectDragSort(container) {
     // 长按拖动时屏蔽右键/长按菜单
     const onCtx = (e) => { if (longPress || dragging) e.preventDefault(); };
     card.addEventListener('contextmenu', onCtx);
+    // 长按时禁止文本选中
+    card.addEventListener('selectstart', (e) => e.preventDefault());
     card.addEventListener('pointerdown', (e) => {
       if (e.target.closest('.project-actions') || e.target.closest('.mini-btn')) return; // 不干扰按钮
+      // 阻止任何选区随手指扩散
+      if (window.getSelection && window.getSelection().removeAllRanges) window.getSelection().removeAllRanges();
       pointerId = e.pointerId;
       startY = e.clientY;
       pressTimer = setTimeout(() => {
