@@ -1306,9 +1306,11 @@ function initProjectDragSort(container) {
   const cards = [...container.querySelectorAll('.project-card')];
   let startDocY = null, dragging = null, longPress = false;
   let pointerId = null;
+  let grabOffset = 0;   // 手指在卡片内的抓取偏移(相对卡片顶部)
+  let finalShift = 0;   // 相对原始索引的位移(槽位)
+  let lastClientY = 0;  // 最近一次手指的视口纵坐标
   const pressMs = 350; // 长按触发阈值
   let pressTimer = null;
-  let finalShift = 0;
   let moved = false;
   let moveLock = null; // 锁滚动用的 touchmove 监听
   let scrollRaf = 0;   // 自动滚动用 rAF 句柄
@@ -1317,6 +1319,7 @@ function initProjectDragSort(container) {
   const SCROLL_SPEED = 14; // 每帧滚动像素
 
   const getList = () => [...container.children].filter(el => el.classList.contains('project-card'));
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
 
   // 拖动期间禁止页面随手指原生滚动
   function lockScroll(on) {
@@ -1337,10 +1340,37 @@ function initProjectDragSort(container) {
     }
   }
 
-  // 自动滚动：手指在顶部/底部边缘时驱动页面滚动，被拖卡片随之进入可视区
+  // 依据手指位置的文档坐标，把被拖卡片移动到手指所指的目标槽位（可连续跨多格）
+  function repositionTo(docY) {
+    if (!dragging) return;
+    const dy = docY - startDocY;
+    const list = getList();
+    const step = dragging.offsetHeight + 12; // 卡片底部间距12px
+    // 按手指当前文档位置解析应插入的目标槽位，直到列表末端
+    const targetIdx = clamp(Math.round(dy / step), -list.indexOf(dragging), list.length - 1 - list.indexOf(dragging));
+    if (targetIdx !== finalShift) {
+      const idx = list.indexOf(dragging);
+      const target = list[idx + (targetIdx - finalShift)];
+      if (target) {
+        container.insertBefore(dragging, targetIdx > finalShift ? target.nextSibling : target);
+      } else {
+        // 拖到末尾
+        container.appendChild(dragging);
+      }
+      finalShift = targetIdx;
+      syncStateOrder();
+    }
+    // 被拖卡片跟随手指
+    dragging.style.transition = 'none';
+    dragging.style.transform = `translateY(${dy - finalShift * step}px) scale(1.02)`;
+  }
+
+  // 自动滚动：手指在顶部/底部边缘时驱动页面滚动，被拖卡片随之持续移动到目标位置
   function tickAutoScroll() {
     if (!dragging || !scrollDir) { scrollRaf = 0; scrollDir = 0; return; }
     window.scrollBy(0, scrollDir * SCROLL_SPEED);
+    // 手指停在边缘不动时，也随页面滚动持续推进到目标槽位
+    repositionTo(lastClientY + window.scrollY);
     // 滚到边界后夹断，避免空转
     const sy = window.scrollY;
     const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -1358,29 +1388,10 @@ function initProjectDragSort(container) {
     // 长按触发前不允许移动（避免普通点击滚动被当成拖拽）
     if (!longPress) { onCancel(); return; }
     moved = true;
-    // 用文档坐标（clientY + 已滚动量）计算，保证自动滚动后换位与位移依旧准确
-    const docY = e.clientY + window.scrollY;
-    const dy = docY - startDocY;
-    const list = getList();
-    const step = dragging.offsetHeight + 12; // 卡片底部间距12px
-    let shift = Math.round(dy / step);
-    const maxShift = list.length - 1 - list.indexOf(dragging);
-    const minShift = -list.indexOf(dragging);
-    shift = Math.max(minShift, Math.min(maxShift, shift));
-    if (shift !== finalShift) {
-      // 实时移动 DOM 顺序，显示目标占位
-      const idx = list.indexOf(dragging);
-      const target = list[idx + (shift - finalShift)];
-      if (target) {
-        container.insertBefore(dragging, shift > finalShift ? target.nextSibling : target);
-      }
-      finalShift = shift;
-      syncStateOrder();
-    }
-    // 被拖卡片跟随手指：dy 减去已换位占掉的偏移，避免位置跳变
-    dragging.style.transition = 'none';
-    dragging.style.transform = `translateY(${dy - finalShift * step}px) scale(1.02)`;
-    // 边缘自动滚动
+    lastClientY = e.clientY;
+    // 用文档坐标（clientY + 已滚动量）计算，保证自动滚动后位移依旧准确
+    repositionTo(e.clientY + window.scrollY);
+    // 手指接近视口上下边缘时自动滚动页面，让卡片持续朝该方向移动到目标位置
     const cy = e.clientY;
     const vh = window.innerHeight;
     if (cy < EDGE) requestAutoScroll(-1);
