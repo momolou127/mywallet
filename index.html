@@ -195,6 +195,7 @@ body {
 
 /* 项目卡 */
 .project-card {
+  position: relative;
   background: var(--card);
   border-radius: var(--radius);
   padding: 16px;
@@ -202,7 +203,24 @@ body {
   box-shadow: var(--shadow);
   transition: transform 0.15s;
 }
+.project-card.dragging { transition: none; }
 .project-card:active { transform: scale(0.98); }
+.project-card.dragging {
+  opacity: 0.65;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  transform: scale(1.02);
+  transition: none;
+}
+.drag-handle {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  color: var(--text-3);
+  font-size: 15px;
+  opacity: 0.5;
+  pointer-events: none;
+  letter-spacing: 1px;
+}
 .project-header {
   display: flex;
   justify-content: space-between;
@@ -945,6 +963,7 @@ let state = {
   records: [],
   goal: 0,
   activeTab: 'all',
+  projectOrder: [],   // 项目自定义排序（存项目 id），空则用原始顺序
   snapshotDate: null,
   equity: [],   // 股权激励：[{id,name,color,totalAmount,grantPrice,totalShares,grantDate,vestYears,vestBatches,vestStartYear,createdAt,vests:[{id,date,amount,shares,note}]}]
   equityView: 'project',  // 'project' 按项目查看 / 'time' 按解禁时间查看
@@ -991,6 +1010,16 @@ function loadData() {
     try {
       const data = JSON.parse(raw);
       state.projects = data.projects || [];
+      state.projectOrder = Array.isArray(data.projectOrder) ? data.projectOrder : [];
+      // 应用自定义排序：projectOrder 中的 id 排在前面（保持现有顺序），其余按原顺序跟在后面
+      if (state.projectOrder.length) {
+        const orderMap = new Map(state.projectOrder.map((id, i) => [id, i]));
+        state.projects.sort((a, b) => {
+          const ia = orderMap.has(a.id) ? orderMap.get(a.id) : 999 + state.projectOrder.length;
+          const ib = orderMap.has(b.id) ? orderMap.get(b.id) : 999 + state.projectOrder.length;
+          return ia - ib;
+        });
+      }
       state.records = data.records || [];
       state.goal = data.goal || 0;
       state.equity = Array.isArray(data.equity) ? data.equity : [];
@@ -1009,6 +1038,7 @@ function loadData() {
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     projects: state.projects,
+    projectOrder: state.projectOrder,
     records: state.records,
     goal: state.goal || 0,
     equity: state.equity,
@@ -1240,7 +1270,7 @@ function renderHome() {
     }
     const latestAmount = latest ? latest.amount : 0;
 
-    html += `<div class="project-card" onclick="showProjectDetail('${p.id}')">
+    html += `<div class="project-card" data-pid="${p.id}" onclick="showProjectDetail('${p.id}')">
       <div class="project-header">
         <div class="project-info">
           <div class="project-name"><span class="project-color" style="background:${p.color}"></span>${p.name}</div>
@@ -1252,9 +1282,98 @@ function renderHome() {
           <button class="mini-btn" onclick="showProjectDetail('${p.id}')" title="详情">›</button>
         </div>
       </div>
+      ${state.activeTab === 'all' && state.projects.length > 1 ? '<div class="drag-handle" title="长按拖动排序">⠿</div>' : ''}
     </div>`;
   });
   content.innerHTML = html;
+  // 仅在"全部"标签下启用长按拖动排序
+  if (state.activeTab === 'all' && content.querySelectorAll('.project-card').length > 1) {
+    initProjectDragSort(content);
+  }
+}
+
+// 长按 + 拖动排序（Pointer Events 实现）
+function initProjectDragSort(container) {
+  const cards = [...container.querySelectorAll('.project-card')];
+  let startY = null, startX = null, dragging = null, longPress = false;
+  let pointerId = null;
+  const pressMs = 350; // 长按触发阈值
+  let pressTimer = null;
+  let finalShift = 0;
+  let moved = false;
+
+  const getList = () => [...container.children].filter(el => el.classList.contains('project-card'));
+
+  const onMove = (e) => {
+    if (!dragging || pointerId !== e.pointerId) return;
+    e.preventDefault();
+    const dy = e.clientY - startY;
+    const dx = e.clientX - startX;
+    // 长按触发前不允许移动（避免普通点击滚动被当成拖拽）
+    if (!longPress) { onCancel(); return; }
+    moved = true;
+    const list = getList();
+    let shift = Math.round(dy / (dragging.offsetHeight + 12)); // 卡片底部间距12px
+    const maxShift = list.length - 1 - list.indexOf(dragging);
+    const minShift = -list.indexOf(dragging);
+    shift = Math.max(minShift, Math.min(maxShift, shift));
+    // 让被拖卡片跟随手指
+    dragging.style.transition = 'none';
+    dragging.style.transform = `translateY(${dy}px) scale(1.02)`;
+    if (shift !== finalShift) {
+      // 实时交换 DOM 顺序，显示目标占位
+      const idx = list.indexOf(dragging);
+      const target = list[idx + (shift - finalShift)];
+      if (target) {
+        container.insertBefore(dragging, shift > finalShift ? target.nextSibling : target);
+      }
+      finalShift = shift;
+      syncStateOrder();
+    }
+  };
+
+  const onCancel = () => {
+    if (longPress && dragging && moved) {
+      dragging.classList.remove('dragging');
+      dragging.style.transform = '';
+      dragging.style.transition = '';
+      saveData(); // 持久化排序
+      toast('项目顺序已调整');
+    } else if (longPress && dragging) {
+      dragging.classList.remove('dragging');
+      dragging.style.transform = '';
+      dragging.style.transition = '';
+    }
+    dragging = null; longPress = false; pointerId = null; finalShift = 0; moved = false;
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  };
+
+  function syncStateOrder() {
+    // 依据当前 DOM 顺序同步 state.projects 与 projectOrder
+    const orderIds = getList().map(el => el.dataset.pid);
+    const orderMap = new Map(orderIds.map((id, i) => [id, i]));
+    state.projects.sort((a, b) =>
+      (orderMap.has(a.id) ? orderMap.get(a.id) : 999) - (orderMap.has(b.id) ? orderMap.get(b.id) : 999));
+    state.projectOrder = state.projects.map(p => p.id);
+  }
+
+  cards.forEach(card => {
+    card.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.project-actions') || e.target.closest('.mini-btn')) return; // 不干扰按钮
+      pointerId = e.pointerId;
+      startY = e.clientY; startX = e.clientX;
+      pressTimer = setTimeout(() => {
+        if (pointerId === null) return;
+        longPress = true;
+        dragging = card;
+        card.classList.add('dragging');
+        card.setPointerCapture && card.setPointerCapture(pointerId);
+      }, pressMs);
+    });
+    card.addEventListener('pointermove', onMove);
+    card.addEventListener('pointerup', onCancel);
+    card.addEventListener('pointercancel', onCancel);
+  });
 }
 
 // 取某日期（含当天）各项目余额快照
@@ -3025,8 +3144,8 @@ document.getElementById('overlay').addEventListener('click', (e) => {
 // ===== PWA 注册 =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // 用 ?v=16 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v16
-    navigator.serviceWorker.register('./sw.js?v=16').then((reg) => {
+    // 用 ?v=17 强制浏览器每次重新拉 sw.js（绕开 HTTP 缓存），确保 SW 能升级到 v17
+    navigator.serviceWorker.register('./sw.js?v=17').then((reg) => {
       // 检测到新 SW 安装成功（说明发布过新版），自动激活并刷新
       reg.addEventListener('updatefound', () => {
         const newSw = reg.installing;
