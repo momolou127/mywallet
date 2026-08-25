@@ -1794,10 +1794,12 @@ function drawTrendChart() {
   let svg = `<svg viewBox="0 0 ${w} ${h}" class="chart-svg">`;
   // Y轴网格
   const yLabels = [max, (max + min) / 2, min];
+  // 隐藏金额模式下Y轴刻度也打码，避免通过刻度反推真实金额
+  const yTxt = v => amountHidden ? '****' : `${CUR()}${v>=10000?(v/10000).toFixed(1)+'万':Math.round(v)}`;
   yLabels.forEach(v => {
     const y = pad.t + ch - (v - min) / range * ch;
     svg += `<line x1="${pad.l}" y1="${y}" x2="${w-pad.r}" y2="${y}" stroke="${grid}" stroke-width="1"/>`;
-    svg += `<text x="${pad.l-5}" y="${y+3}" font-size="9" fill="${txtC}" text-anchor="end">${CUR()}${v>=10000?(v/10000).toFixed(1)+'万':Math.round(v)}</text>`;
+    svg += `<text x="${pad.l-5}" y="${y+3}" font-size="9" fill="${txtC}" text-anchor="end">${yTxt(v)}</text>`;
   });
   // 0 基线
   svg += `<line x1="${pad.l}" y1="${baseY}" x2="${w-pad.r}" y2="${baseY}" stroke="${baseC}" stroke-width="1"/>`;
@@ -1849,7 +1851,8 @@ function drawPieChart(totals, grandTotal) {
   });
 
   // 图例
-  svg += `<text x="200" y="18" font-size="12" font-weight="700" fill="${t1}">合计 ${CUR()}${grandTotal>=10000?(grandTotal/10000).toFixed(1)+'万':Math.round(grandTotal)}</text>`;
+  const grandTxt = amountHidden ? '****' : `${CUR()}${grandTotal>=10000?(grandTotal/10000).toFixed(1)+'万':Math.round(grandTotal)}`;
+  svg += `<text x="200" y="18" font-size="12" font-weight="700" fill="${t1}">合计 ${grandTxt}</text>`;
   let legendY = 42;
   totals.filter(t => t.amount > 0).forEach(t => {
     const pct = (t.amount/grandTotal*100).toFixed(1);
