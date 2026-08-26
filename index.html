@@ -1173,6 +1173,15 @@ function getTotalAtDate(dateStr, projectList) {
   return has ? total : null;
 }
 
+// 计算某项目截止某日期（含当天）的余额：取该日期及之前最后一条记录的金额
+function getProjectAmountAtDate(pid, dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.split('-');
+  const cutoff = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59).getTime();
+  const recs = getProjectRecords(pid).filter(r => new Date(r.date).getTime() <= cutoff);
+  return recs.length ? recs[recs.length - 1].amount : null;
+}
+
 // 上个月最后一天（YYYY-MM-DD）
 function getLastMonthEndStr() {
   const now = new Date();
@@ -1225,12 +1234,14 @@ function renderPage() {
 }
 
 function renderTotal() {
-  const { total, latestDate, prevTotal } = getTotalLatest();
+  const { total, latestDate } = getTotalLatest();
   document.getElementById('totalAmount').textContent = fmtMoney(total);
   const curEl = document.getElementById('totalCurrency');
   if (curEl) curEl.textContent = CUR();
   const changeEl = document.getElementById('totalChange');
   const dateEl = document.getElementById('totalDate');
+  // 对比基准：上月月末最后一天该项目集的总存款快照
+  const prevTotal = getTotalAtDate(getLastMonthEndStr(), state.projects);
   if (prevTotal !== null) {
     const diff = total - prevTotal;
     const pct = prevTotal ? (diff / prevTotal * 100).toFixed(1) : 0;
@@ -1264,11 +1275,12 @@ function renderHome() {
   projects.forEach(p => {
     const recs = getProjectRecords(p.id);
     const latest = recs.length ? recs[recs.length-1] : null;
-    const prev = latest ? getPrevRecord(p.id, latest.date) : null;
+    // 对比基准：上月月末最后一天该项目的余额
+    const prevVal = latest ? getProjectAmountAtDate(p.id, getLastMonthEndStr()) : null;
     let changeHtml = '<div class="project-change flat">暂无数据</div>';
-    if (latest && prev) {
-      const diff = latest.amount - prev.amount;
-      const pct = prev.amount ? (diff/prev.amount*100).toFixed(1) : 0;
+    if (latest && prevVal !== null) {
+      const diff = latest.amount - prevVal;
+      const pct = prevVal ? (diff/prevVal*100).toFixed(1) : 0;
       if (diff > 0) changeHtml = `<div class="project-change up">↑ ${CUR()}${fmtMoney(diff)} (+${pct}%)</div>`;
       else if (diff < 0) changeHtml = `<div class="project-change down">↓ ${CUR()}${fmtMoney(Math.abs(diff))} (${pct}%)</div>`;
       else changeHtml = `<div class="project-change flat">— 持平</div>`;
