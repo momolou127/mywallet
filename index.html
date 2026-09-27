@@ -2513,7 +2513,7 @@ function setEquityView(v) {
 
 function onFabClick() {
   if (currentPage === 'equity') showAddEquitySheet();
-  else if (currentPage === 'budget') showAddBudgetItemSheet();
+  else if (currentPage === 'budget') showAddBudgetItemSheet(getBudgetYear(), 'expense');
   else showAddRecordSheet();
 }
 function onHeaderAddClick() {
@@ -2544,7 +2544,10 @@ function budgetItems(year, type) {
   return y[type];
 }
 function ensureBudgetYear(year) {
+  // 只接受 4 位数字年份，杜绝 undefined/null 等脏键的生成
+  if (!/^\d{4}$/.test(String(year))) year = String(new Date().getFullYear());
   if (!state.budget[year]) state.budget[year] = { income: [], expense: [] };
+  return year;
 }
 
 function renderBudget() {
@@ -2690,7 +2693,8 @@ function saveBudgetItem(year, type) {
   const amount = parseFloat(document.getElementById('biAmount').value);
   if (!name) { toast('请输入项目名称'); return; }
   if (isNaN(amount)) { toast('请输入金额'); return; }
-  ensureBudgetYear(year);
+  year = ensureBudgetYear(year); // 规范化年份，避免脏键
+  type = type === 'income' ? 'income' : 'expense';
   state.budget[year][type].push({ id: uid(), name, amount });
   saveData();
   closeSheet();
