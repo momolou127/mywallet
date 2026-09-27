@@ -2530,7 +2530,13 @@ function getBudgetYear() {
   return String(new Date().getFullYear());
 }
 function getBudgetYears() {
-  return Object.keys(state.budget).sort().reverse();
+  // 过滤掉残留的无效年份键（如 "undefined"/"null"），避免渲染出 "undefined年"
+  const years = Object.keys(state.budget).filter(y => /^\d{4}$/.test(String(y)));
+  // 顺手清理脏键，让本地存储保持干净
+  Object.keys(state.budget).forEach(k => {
+    if (!/^\d{4}$/.test(String(k))) delete state.budget[k];
+  });
+  return years.sort().reverse();
 }
 function budgetItems(year, type) {
   const y = state.budget[year];
