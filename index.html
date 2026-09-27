@@ -947,6 +947,9 @@ body {
   <button class="nav-item" data-page="stats" onclick="switchPage('stats')">
     <span class="nav-icon">📊</span><span>统计</span>
   </button>
+  <button class="nav-item" data-page="budget" onclick="switchPage('budget')">
+    <span class="nav-icon">💰</span><span>收支</span>
+  </button>
   <button class="nav-item" data-page="equity" onclick="switchPage('equity')">
     <span class="nav-icon">📈</span><span>中长期激励</span>
   </button>
@@ -976,6 +979,8 @@ let state = {
   equityView: 'project',  // 'project' 按项目查看 / 'time' 按解禁时间查看
   currentPrice: 19,       // 现行股价（用于估算股权预计金额），默认19，可修改
   currency: '¥',          // 显示币种符号（默认人民币）
+  budget: {},             // 收支统计：{ "年份": { income:[{id,name,amount}], expense:[{id,name,amount}] } }
+  budgetYear: null,       // 收支统计当前选中年份
 };
 
 // 获取现行股价（兼容旧数据：空/0 时回退默认19）
@@ -1032,6 +1037,8 @@ function loadData() {
       state.equity = Array.isArray(data.equity) ? data.equity : [];
       state.currentPrice = Number(data.currentPrice) > 0 ? Number(data.currentPrice) : 19;
       state.currency = VALID_CURRENCIES[data.currency] ? data.currency : '¥';
+      state.budget = data.budget && typeof data.budget === 'object' ? data.budget : {};
+      state.budgetYear = data.budgetYear || null;
       // 如果存储的数据是空的（被清空过），重新生成演示数据
       if (state.projects.length === 0 && state.records.length === 0 && (state.equity||[]).length === 0) {
         seedDemo();
@@ -1050,7 +1057,9 @@ function saveData() {
     goal: state.goal || 0,
     equity: state.equity,
     currentPrice: state.currentPrice || 19,
-    currency: state.currency || '¥'
+    currency: state.currency || '¥',
+    budget: state.budget || {},
+    budgetYear: state.budgetYear || null
   }));
 }
 
@@ -1228,6 +1237,7 @@ function renderPage() {
   if (currentPage === 'home') renderHome();
   else if (currentPage === 'snapshot') renderSnapshot();
   else if (currentPage === 'stats') renderStats();
+  else if (currentPage === 'budget') renderBudget();
   else if (currentPage === 'equity') renderEquity();
   renderTotal();
   renderGoalBanner();
@@ -2503,11 +2513,221 @@ function setEquityView(v) {
 
 function onFabClick() {
   if (currentPage === 'equity') showAddEquitySheet();
+  else if (currentPage === 'budget') showAddBudgetItemSheet();
   else showAddRecordSheet();
 }
 function onHeaderAddClick() {
   if (currentPage === 'equity') showAddEquitySheet();
+  else if (currentPage === 'budget') showAddBudgetYearSheet();
   else showAddProjectSheet();
+}
+
+// ===== 收支统计 =====
+// 数据模型：state.budget = { "2026": { income:[{id,name,amount}], expense:[{id,name,amount}] } }
+function getBudgetYear() {
+  // 默认当年；若无数据也默认当年
+  if (state.budgetYear) return state.budgetYear;
+  return String(new Date().getFullYear());
+}
+function getBudgetYears() {
+  return Object.keys(state.budget).sort().reverse();
+}
+function budgetItems(year, type) {
+  const y = state.budget[year];
+  if (!y || !y[type]) return [];
+  return y[type];
+}
+function ensureBudgetYear(year) {
+  if (!state.budget[year]) state.budget[year] = { income: [], expense: [] };
+}
+
+function renderBudget() {
+  const content = document.getElementById('content');
+  const year = getBudgetYear();
+  ensureBudgetYear(year);
+  const years = getBudgetYears();
+  const inc = budgetItems(year, 'income');
+  const exp = budgetItems(year, 'expense');
+  const incTotal = inc.reduce((s,it)=>s+(Number(it.amount)||0),0);
+  const expTotal = exp.reduce((s,it)=>s+(Number(it.amount)||0),0);
+  const balance = incTotal - expTotal;
+
+  // 年份选择器（横向滚动）+ 新增年份
+  let yearTabs = `<div class="sub-tabs" style="flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;padding-bottom:4px;">`;
+  years.forEach(yr => {
+    yearTabs += `<div class="sub-tab ${yr===year?'active':''}" onclick="setBudgetYear('${yr}')" style="flex-shrink:0;">${yr}年</div>`;
+  });
+  yearTabs += `<div class="sub-tab" onclick="showAddBudgetYearSheet()" style="flex-shrink:0;color:var(--primary);">＋ 年份</div>`;
+  yearTabs += `</div>`;
+
+  // 年度结余卡
+  const balCls = balance > 0 ? 'change-up' : (balance < 0 ? 'change-down' : '');
+  const balArrow = balance > 0 ? '盈余' : (balance < 0 ? '赤字' : '持平');
+  let html = `<div class="page-head">
+    <div class="page-title">收支统计</div>
+    <div class="page-sub">预估各年度收入支出，统计年度结余</div>
+  </div>`;
+  html += yearTabs;
+  html += `<div style="display:flex;gap:10px;margin:4px 4px 14px;">
+      <div style="flex:1;background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;">
+        <div style="font-size:12px;color:var(--text-2);">年度收入</div>
+        <div style="font-size:20px;font-weight:700;color:var(--primary2,var(--primary));">${CUR()}${fmtMoney(incTotal)}</div>
+      </div>
+      <div style="flex:1;background:var(--card);border-radius:12px;box-shadow:var(--shadow);padding:12px 14px;">
+        <div style="font-size:12px;color:var(--text-2);">年度支出</div>
+        <div style="font-size:20px;font-weight:700;color:#ff3b30;">${CUR()}${fmtMoney(expTotal)}</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border-radius:14px;padding:16px;margin:0 4px 14px;">
+      <div style="font-size:13px;opacity:.9;">年度结余</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;">
+        <div style="font-size:22px;font-weight:800;">${CUR()}${fmtMoney(Math.abs(balance))}</div>
+        <div style="font-size:12px;opacity:.9;">${balArrow}</div>
+      </div>
+    </div>`;
+
+  // 收入项目
+  html += renderBudgetGroup(year, 'income', inc, incTotal);
+  // 支出项目
+  html += renderBudgetGroup(year, 'expense', exp, expTotal);
+
+  content.innerHTML = html;
+}
+
+function renderBudgetGroup(year, type, items, total) {
+  const title = type === 'income' ? '收入项目' : '支出项目';
+  const addLbl = type === 'income' ? '＋ 添加收入' : '＋ 添加支出';
+  let h = `<div class="section-title" style="margin:10px 2px 8px;padding-left:4px;">${title} <span style="color:var(--text-3);font-weight:400;">合计 ${CUR()}${fmtMoney(total)}</span></div>`;
+  h += `<div style="background:var(--card);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px;">`;
+  if (items.length === 0) {
+    h += `<div style="padding:18px 16px;color:var(--text-3);font-size:13px;">还没有${title}，点击右下角"＋"添加</div>`;
+  } else {
+    items.forEach(it => {
+      const amtFmt = `${CUR()}${fmtMoney(Number(it.amount)||0)}`;
+      h += `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:0.5px solid var(--border);">
+        <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${type==='income'?'var(--green,#34c759)':'#ff3b30'};"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:600;color:var(--text-1,#1d1d1f);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(it.name||'未命名项目')}</div>
+          <div style="font-size:12px;color:${type==='income'?'var(--green,#34c759)':'#ff3b30'};font-weight:500;">${amtFmt}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="mini-btn" onclick="showEditBudgetItemSheet('${year}','${type}','${it.id}')" title="编辑">✎</button>
+          <button class="mini-btn" onclick="deleteBudgetItem('${year}','${type}','${it.id}')" title="删除">🗑</button>
+        </div>
+      </div>`;
+    });
+  }
+  h += `<div style="display:flex;">
+    <button style="flex:1;background:none;border:none;padding:12px;color:var(--primary);font-size:13px;font-weight:600;cursor:pointer;" onclick="showAddBudgetItemSheet('${year}','${type}')">${addLbl}</button>
+  </div>`;
+  h += `</div>`;
+  return h;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function setBudgetYear(yr) {
+  state.budgetYear = yr;
+  saveData();
+  renderBudget();
+}
+
+function showAddBudgetYearSheet() {
+  const year = getBudgetYear();
+  openSheet(`
+    <div class="sheet-title">添加年份</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">年份（如 2026）</label>
+        <input type="number" class="form-input" id="bYear" placeholder="${year}" min="2020" step="1">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveBudgetYear()">添加</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+function saveBudgetYear() {
+  const y = document.getElementById('bYear').value.trim();
+  if (!/^\d{4}$/.test(y)) { toast('请输入4位年份'); return; }
+  ensureBudgetYear(y);
+  state.budgetYear = y;
+  saveData();
+  closeSheet();
+  renderBudget();
+}
+
+function showAddBudgetItemSheet(year, type) {
+  openSheet(`
+    <div class="sheet-title">${type==='income'?'添加收入项目':'添加支出项目'}</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">项目名称</label>
+        <input type="text" class="form-input" id="biName" placeholder="${type==='income'?'如：工资、奖金、投资收益':'如：房租、日常开销'}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">年度金额</label>
+        <input type="number" class="form-input amount-input" id="biAmount" placeholder="0.00" step="0.01">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveBudgetItem('${year}','${type}')">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+function saveBudgetItem(year, type) {
+  const name = document.getElementById('biName').value.trim();
+  const amount = parseFloat(document.getElementById('biAmount').value);
+  if (!name) { toast('请输入项目名称'); return; }
+  if (isNaN(amount)) { toast('请输入金额'); return; }
+  ensureBudgetYear(year);
+  state.budget[year][type].push({ id: uid(), name, amount });
+  saveData();
+  closeSheet();
+  renderBudget();
+}
+
+function showEditBudgetItemSheet(year, type, id) {
+  const it = state.budget[year][type].find(x => x.id === id);
+  if (!it) return;
+  openSheet(`
+    <div class="sheet-title">编辑${type==='income'?'收入':'支出'}项目</div>
+    <div class="sheet-body">
+      <div class="form-group">
+        <label class="form-label">项目名称</label>
+        <input type="text" class="form-input" id="biName" value="${escapeHtml(it.name)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">年度金额</label>
+        <input type="number" class="form-input amount-input" id="biAmount" value="${Number(it.amount)||0}" step="0.01">
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="saveEditBudgetItem('${year}','${type}','${id}')">保存</button>
+      <button class="btn-secondary" onclick="closeSheet()">取消</button>
+    </div>
+  `);
+}
+function saveEditBudgetItem(year, type, id) {
+  const name = document.getElementById('biName').value.trim();
+  const amount = parseFloat(document.getElementById('biAmount').value);
+  if (!name) { toast('请输入项目名称'); return; }
+  if (isNaN(amount)) { toast('请输入金额'); return; }
+  const it = state.budget[year][type].find(x => x.id === id);
+  if (it) { it.name = name; it.amount = amount; }
+  saveData();
+  closeSheet();
+  renderBudget();
+}
+function deleteBudgetItem(year, type, id) {
+  if (!confirm('确定删除该项目？')) return;
+  state.budget[year][type] = state.budget[year][type].filter(x => x.id !== id);
+  saveData();
+  renderBudget();
 }
 
 function renderEquity() {
